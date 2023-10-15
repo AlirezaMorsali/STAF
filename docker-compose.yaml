@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  development:
+    container_name: parac-1
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "8004:8002"
+      - "8003:8001"
+    volumes:
+      - .:/app
+    privileged: true
+    command: tail -f /dev/null
