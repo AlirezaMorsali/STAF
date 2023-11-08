@@ -155,10 +155,6 @@ class INR(nn.Module):
             dtype = torch.float
             final_linear = nn.Linear(hidden_features, out_features, dtype=dtype)
 
-            with torch.no_grad():
-                const = np.sqrt(6 / hidden_features) / max(hidden_omega_0, 1e-12)
-                final_linear.weight.uniform_(-const, const)
-
             self.net.append(final_linear)
         else:
             self.net.append(
