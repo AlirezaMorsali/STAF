@@ -15,7 +15,7 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
     print("CUDA is not available. Using CPU.")
-plt.gray()
+# plt.gray()
 
 
 import os
@@ -29,7 +29,7 @@ from scipy import io
 
 import matplotlib.pyplot as plt
 
-plt.gray()
+# plt.gray()
 
 import cv2
 from skimage.metrics import structural_similarity as ssim_func
@@ -46,7 +46,7 @@ parser = argparse.ArgumentParser(description="Image reconstruction parameters")
 parser.add_argument(
     "-i",
     "--input_image",
-    action="store_true",
+    type=str,
     help="Path to input image",
     default="./data/cameraman.tif",
 )
@@ -59,6 +59,13 @@ parser.add_argument(
     # default="siren",
     # default="wire",
     default="parac",
+)
+parser.add_argument(
+    "-s",
+    "--resize",
+    type=int,
+    default=None,
+    help="If not None resize to the provided size",
 )
 args = parser.parse_args()
 
@@ -87,8 +94,10 @@ maxpoints = 256 * 256  # Batch size
 
 # Read image and scale. A scale of 0.5 for parrot image ensures that it
 # fits in a 12GB GPU
-inpu_image = plt.imread(image_path)
-im = utils.normalize(inpu_image.astype(np.float32), True)
+input_image = plt.imread(image_path)
+if args.resize:
+    input_image = cv2.resize(input_image, (args.resize, args.resize))
+im = utils.normalize(input_image.astype(np.float32), True)
 # im = cv2.resize(im, None, fx=1 / 4, fy=1 / 4, interpolation=cv2.INTER_AREA)
 
 imsh = im.shape
@@ -99,7 +108,11 @@ imsh = im.shape
     imsh[0],
     imsh[1],
 )
-imdim = 1 if len(imsh) == 2 else 3
+if len(imsh) == 2:
+    imdim = 1
+    im = im[:, :, np.newaxis]
+else:
+    imdim = 3
 
 # Create a noisy image
 # im_noisy = utils.measure(im, noise_snr, tau)
@@ -213,6 +226,7 @@ for epoch in tbar:
     cv2.waitKey(1)
 
     if (mse_array[epoch] < best_mse) or (epoch == 0):
+        best_psnr = psnrval
         best_mse = mse_array[epoch]
         best_img = imrec
 
@@ -234,12 +248,12 @@ cv2.imwrite(f"results/denoising/{nonlin}.jpg", best_img[..., ::-1])
 
 print("Best PSNR: %.2f dB" % utils.psnr(im, best_img))  # %%
 
-
 fig, axes = plt.subplots(1, 2, figsize=(18, 6))
-axes[0].imshow(inpu_image)
+axes[0].imshow(input_image)
 axes[1].imshow(best_img)
 axes[0].title.set_text("Original")
 axes[1].title.set_text(f"{nonlin}")
 plt.savefig(f"results/Original-vs-{nonlin}.png")  # Save as PNG image
 
+plt.gray()
 plt.show()

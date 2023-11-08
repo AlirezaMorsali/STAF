@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 #!/usr/bin/env python
 
 import pdb
@@ -10,18 +9,6 @@ import torch
 from torch import nn
 
 from .utils import build_montage, normalize
-
-
-def param_act(linout, ws, bs, phis):
-    linoutx = linout.unsqueeze(-1).repeat_interleave(ws.shape[0], dim=3)
-    wsx = ws.expand(linout.shape[0], linout.shape[1], linout.shape[2], -1)
-    bsx = bs.expand(linout.shape[0], linout.shape[1], linout.shape[2], -1)
-    phisx = phis.expand(linout.shape[0], linout.shape[1], linout.shape[2], -1)
-    temp = bsx * (torch.sin((wsx * linoutx) + phisx))
-    temp2 = torch.sum(temp, 3)
-    # print(f"Activation Call input size:{linout.shape}")
-    # print(f"Activation Call output size:{temp2.shape}")
-    return temp2
 
 
 class Parasin(nn.Module):
@@ -51,7 +38,7 @@ class Parasin(nn.Module):
         # def __init__(
         # self, in_features, out_features, nf, bias=True, is_first=False, omega_0=30
         # ):
-        nf = 3
+        nf = 25
         super().__init__()
         self.omega_0 = omega_0
         self.is_first = is_first
@@ -59,10 +46,32 @@ class Parasin(nn.Module):
         self.in_features = in_features
         self.linear = nn.Linear(in_features, out_features, bias=bias)
         self.ws = nn.Parameter(torch.ones(nf), requires_grad=True)
-        self.bs = nn.Parameter(torch.ones(nf), requires_grad=True)
-        self.phis = nn.Parameter(torch.zeros(nf), requires_grad=True)
+        # self.phis = nn.Parameter(torch.zeros(nf), requires_grad=True)
+        # self.bs = nn.Parameter(torch.ones(nf), requires_grad=True)
 
-        self.init_weights()
+        # Generate uniform samples between 0 and 1
+        uniform_samples = torch.rand(nf)
+
+        # Scale and shift the samples to the range [-π, π]
+        lower_bound = -torch.tensor([3.14159265358979323846])  # -π
+        upper_bound = torch.tensor([3.14159265358979323846])  # π
+        scaled_samples = lower_bound + (upper_bound - lower_bound) * uniform_samples
+
+        self.phis = nn.Parameter(scaled_samples, requires_grad=True)
+
+        # Mean and diversity for Laplace random variable Y
+        mean_y = 0
+        diversity_y = 2 / 100
+        # Generate Laplace random variable Y
+        laplace_samples = torch.distributions.laplace.Laplace(
+            mean_y, diversity_y
+        ).sample((nf,))
+
+        # Compute C from Y
+        c_samples = torch.sign(laplace_samples) * torch.sqrt(torch.abs(laplace_samples))
+        self.bs = nn.Parameter(c_samples, requires_grad=True)
+
+        # self.init_weights()
 
     def init_weights(self):
         with torch.no_grad():
@@ -78,7 +87,18 @@ class Parasin(nn.Module):
         # return torch.sin(self.omega_0 * self.linear(input))
         temp = self.omega_0 * self.linear(input)
         # print(temp.shape)
-        return param_act(temp, self.ws, self.bs, self.phis)
+        return self.param_act(temp, self.ws, self.bs, self.phis)
+
+    def param_act(self, linout, ws, bs, phis):
+        linoutx = linout.unsqueeze(-1).repeat_interleave(ws.shape[0], dim=3)
+        wsx = ws.expand(linout.shape[0], linout.shape[1], linout.shape[2], -1)
+        bsx = bs.expand(linout.shape[0], linout.shape[1], linout.shape[2], -1)
+        phisx = phis.expand(linout.shape[0], linout.shape[1], linout.shape[2], -1)
+        temp = bsx * (torch.sin((wsx * linoutx) + phisx))
+        temp2 = torch.sum(temp, 3)
+        # print(f"Activation Call input size:{linout.shape}")
+        # print(f"Activation Call output size:{temp2.shape}")
+        return temp2
 
 
 class INR(nn.Module):
