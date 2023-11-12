@@ -81,7 +81,7 @@ sigma0 = 4.0  # Sigma of Gaussian
 # Network parameters
 hidden_layers = 3  # Number of hidden layers in the MLP
 hidden_features = 256  # Number of hidden units per layer
-maxpoints = 256 * 256  # Batch size
+maxpoints = 128 * 128  # Batch size
 
 # Read image and scale. A scale of 0.5 for parrot image ensures that it
 # fits in a 12GB GPU
@@ -157,11 +157,9 @@ X, Y = torch.meshgrid(x, y, indexing="xy")
 coords = torch.hstack((X.reshape(-1, 1), Y.reshape(-1, 1)))[None, ...]
 
 image_tensor = torch.tensor(im)
-image_tensor.to(device)
-gt = image_tensor.reshape(H * W, imdim)[None, ...]
+gt = image_tensor.reshape(H * W, imdim)[None, ...].to(device)
 gt_tensor = torch.tensor(im_noisy)
-gt_tensor.to(device)
-gt_noisy = gt_tensor.reshape(H * W, imdim)[None, ...]
+gt_noisy = gt_tensor.reshape(H * W, imdim)[None, ...].to(device)
 
 mse_array = torch.zeros(niters, device=device)
 mse_loss_array = torch.zeros(niters, device=device)
@@ -170,7 +168,7 @@ time_array = torch.zeros_like(mse_array)
 best_mse = torch.tensor(float("inf"))
 best_img = None
 
-rec = torch.zeros_like(gt)
+rec = torch.zeros_like(gt).to(device)
 
 tbar = tqdm(range(niters))
 init_time = time.time()
@@ -178,16 +176,26 @@ init_time = time.time()
 b_coords = coords.to(device)
 
 for epoch in tbar:
-    pixelvalues = model(b_coords)
+    indices = torch.randperm(H*W)
+    
+    train_loss = cnt = 0
+    for b_idx in range(0, H*W, maxpoints):
+        b_indices = indices[b_idx:min(H*W, b_idx+maxpoints)]
+        b_coords = coords[:, b_indices, ...].cuda()
+        b_indices = b_indices.cuda()
+        pixelvalues = model(b_coords)
+        
+        with torch.no_grad():
+            rec[:, b_indices, :] = pixelvalues
 
-    with torch.no_grad():
-        rec = pixelvalues
+        loss = ((pixelvalues - gt_noisy[:, b_indices, :])**2).mean() 
+        train_loss += loss.item()
+        
+        optim.zero_grad()
+        loss.backward()
+        optim.step()
 
-    loss = ((pixelvalues - gt_noisy) ** 2).mean()
-
-    optim.zero_grad()
-    loss.backward()
-    optim.step()
+        cnt += 1
 
     time_array[epoch] = time.time() - init_time
 
@@ -202,14 +210,14 @@ for epoch in tbar:
         tbar.refresh()
 
         if os.getenv("WANDB_LOG") in ["true", "True", True]:
-            xp.log({"loss": loss, "psnr": psnrval})
+            xp.log({"loss": train_loss / cnt, "psnr": psnrval})
 
     scheduler.step()
 
     imrec = rec[0, ...].reshape(H, W, imdim).detach().cpu().numpy()
 
-    cv2.imshow("Reconstruction", imrec[..., ::-1])
-    cv2.waitKey(1)
+    # cv2.imshow("Reconstruction", imrec[..., ::-1])
+    # cv2.waitKey(1)
 
     if (mse_array[epoch] < best_mse) or (epoch == 0):
         best_psnr = psnrval
