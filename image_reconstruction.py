@@ -1,12 +1,24 @@
 #!/usr/bin/env python3
-# %%
+
+import os
+from tqdm import tqdm
+import time
 import cv2
 import argparse
-import matplotlib.pyplot as plt
-import numpy as np
-import torch
 
-from modules import models, utils
+import numpy as np
+from scipy import io
+import matplotlib.pyplot as plt
+
+import torch
+import torch.nn
+from torch.optim.lr_scheduler import LambdaLR
+
+from modules import models
+from modules import utils
+
+import wandb
+
 
 # Check if CUDA (GPU) is available
 if torch.cuda.is_available():
@@ -15,32 +27,6 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
     print("CUDA is not available. Using CPU.")
-# plt.gray()
-
-
-import os
-import sys
-from tqdm import tqdm
-import importlib
-import time
-
-import numpy as np
-from scipy import io
-
-import matplotlib.pyplot as plt
-
-# plt.gray()
-
-import cv2
-from skimage.metrics import structural_similarity as ssim_func
-
-import torch
-import torch.nn
-from torch.optim.lr_scheduler import LambdaLR
-from pytorch_msssim import ssim
-
-from modules import models
-from modules import utils
 
 parser = argparse.ArgumentParser(description="Image reconstruction parameters")
 parser.add_argument(
@@ -72,6 +58,11 @@ args = parser.parse_args()
 image_path = args.input_image
 nonlin = args.nonlinearity
 # "posenc"  # type of nonlinearity, 'wire', 'siren', 'mfn', 'relu', 'posenc', 'gauss'
+
+if os.getenv("WANDB_LOG") in ["true", "True", True]:
+    run_name = f'{nonlin}_image_denoise__{str(time.time()).replace(".", "_")}'
+    xp = wandb.init(name=run_name, project="pracnet", resume="allow", anonymous="allow")
+
 
 niters = 250  # Number of SGD iterations
 learning_rate = 1e-3  # Learning rate.
@@ -151,9 +142,6 @@ print("Number of parameters: ", utils.count_parameters(model))
 print("Input PSNR: %.2f dB" % utils.psnr(im, im_noisy))
 
 # Create an optimizer
-# optim = torch.optim.Adam(
-#     lr=learning_rate * min(1, maxpoints / (H * W)), params=model.parameters()
-# )
 
 optim = torch.optim.Adam(
     lr=1e-4, betas=(0.9, 0.999), eps=1e-08, params=model.parameters()
@@ -190,11 +178,6 @@ init_time = time.time()
 b_coords = coords.to(device)
 
 for epoch in tbar:
-    # indices = torch.randperm(H * W)
-    # for b_idx in range(0, H * W, maxpoints):
-    # b_indices = indices[b_idx : min(H * W, b_idx + maxpoints)]
-    # b_coords = coords[:, b_indices, ...].to(device)
-    # b_indices = b_indices.to(device)
     pixelvalues = model(b_coords)
 
     with torch.no_grad():
@@ -217,6 +200,9 @@ for epoch in tbar:
         psnrval = -10 * torch.log10(mse_array[epoch])
         tbar.set_description("%.1f" % psnrval)
         tbar.refresh()
+
+        if os.getenv("WANDB_LOG") in ["true", "True", True]:
+            xp.log({"loss": loss, "psnr": psnrval})
 
     scheduler.step()
 
@@ -242,18 +228,45 @@ mdict = {
     "time_array": time_array.detach().cpu().numpy(),
 }
 
-os.makedirs("results/denoising", exist_ok=True)
-io.savemat("results/denoising/%s.mat" % nonlin, mdict)
+os.makedirs(
+    os.path.join(os.getenv("RESULTS_SAVE_PATH"), "denoising"),
+    exist_ok=True,
+)
+io.savemat(
+    os.path.join(
+        os.getenv("RESULTS_SAVE_PATH"),
+        "denoising",
+        "%s.mat" % nonlin,
+    ),
+    mdict,
+)
 cv2.imwrite(f"results/denoising/{nonlin}.jpg", best_img[..., ::-1])
 
 print("Best PSNR: %.2f dB" % utils.psnr(im, best_img))  # %%
+
+# save model
+os.makedirs(
+    os.path.join(os.getenv("MODEL_SAVE_PATH"), "denoising"),
+    exist_ok=True,
+)
+torch.save(
+    model.state_dict(),
+    os.path.join(
+        os.getenv("MODEL_SAVE_PATH"),
+        "denoising",
+        "%s.pth" % nonlin,
+    ),
+)
 
 fig, axes = plt.subplots(1, 2, figsize=(18, 6))
 axes[0].imshow(input_image)
 axes[1].imshow(best_img)
 axes[0].title.set_text("Original")
 axes[1].title.set_text(f"{nonlin}")
-plt.savefig(f"results/Original-vs-{nonlin}.png")  # Save as PNG image
+# plt.savefig(f"results/Original-vs-{nonlin}.png")  # Save as PNG image
 
-plt.gray()
-plt.show()
+plt.savefig(
+    os.path.join(
+        os.getenv("RESULTS_SAVE_PATH"), "denoising", f"Original-vs-{nonlin}.png"
+    )
+)
