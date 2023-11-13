@@ -176,21 +176,21 @@ init_time = time.time()
 b_coords = coords.to(device)
 
 for epoch in tbar:
-    indices = torch.randperm(H*W)
-    
+    indices = torch.randperm(H * W)
+
     train_loss = cnt = 0
-    for b_idx in range(0, H*W, maxpoints):
-        b_indices = indices[b_idx:min(H*W, b_idx+maxpoints)]
+    for b_idx in range(0, H * W, maxpoints):
+        b_indices = indices[b_idx : min(H * W, b_idx + maxpoints)]
         b_coords = coords[:, b_indices, ...].cuda()
         b_indices = b_indices.cuda()
         pixelvalues = model(b_coords)
-        
+
         with torch.no_grad():
             rec[:, b_indices, :] = pixelvalues
 
-        loss = ((pixelvalues - gt_noisy[:, b_indices, :])**2).mean() 
+        loss = ((pixelvalues - gt_noisy[:, b_indices, :]) ** 2).mean()
         train_loss += loss.item()
-        
+
         optim.zero_grad()
         loss.backward()
         optim.step()
@@ -248,7 +248,7 @@ io.savemat(
     ),
     mdict,
 )
-cv2.imwrite(f"results/denoising/{nonlin}.jpg", best_img[..., ::-1])
+# cv2.imwrite(f"results/denoising/{nonlin}.jpg", best_img[..., ::-1])
 
 print("Best PSNR: %.2f dB" % utils.psnr(im, best_img))  # %%
 
@@ -266,15 +266,18 @@ torch.save(
     ),
 )
 
-fig, axes = plt.subplots(1, 2, figsize=(18, 6))
-axes[0].imshow(input_image)
-axes[1].imshow(best_img)
-axes[0].title.set_text("Original")
-axes[1].title.set_text(f"{nonlin}")
+# fig, axes = plt.subplots(1, 2, figsize=(18, 6))
+# axes[0].imshow(input_image)
+# axes[1].imshow(best_img)
+# axes[0].title.set_text("Original")
+# axes[1].title.set_text(f"{nonlin}")
 # plt.savefig(f"results/Original-vs-{nonlin}.png")  # Save as PNG image
 
-plt.savefig(
-    os.path.join(
-        os.getenv("RESULTS_SAVE_PATH"), "denoising", f"Original-vs-{nonlin}.png"
-    )
-)
+# plt.savefig(
+#     os.path.join(
+#         os.getenv("RESULTS_SAVE_PATH"), "denoising", f"Original-vs-{nonlin}.png"
+#     )
+# )
+
+print("saving the image on WANDB")
+wandb.log({f"{nonlin}_image_reconst": [wandb.Image(best_img, caption="Reconstructed image.")]})
