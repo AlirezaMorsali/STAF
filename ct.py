@@ -29,6 +29,14 @@ from modules import lin_inverse
 import argparse
 
 
+# Check if CUDA (GPU) is available
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+    print("CUDA is available. Using GPU.")
+else:
+    device = torch.device("cpu")
+    print("CUDA is not available. Using CPU.")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="CT image parameters")
     parser.add_argument(
@@ -70,6 +78,8 @@ if __name__ == "__main__":
     # Network parameters
     hidden_layers = 2  # Number of hidden layers in the MLP
     hidden_features = 300  # Number of hidden units per layer
+
+    maxpoints = 128 * 128 # batch size
 
     # Generate sampling angles
     thetas = torch.tensor(np.linspace(0, 180, nmeas, dtype=np.float32)).cuda()
@@ -120,8 +130,7 @@ if __name__ == "__main__":
 
     X, Y = torch.meshgrid(x, y, indexing="xy")
 
-    coords = torch.hstack((X.reshape(-1, 1), Y.reshape(-1, 1)))[None, ...]
-
+    coords = torch.hstack((X.reshape(-1, 1), Y.reshape(-1, 1)))[None, ...].to(device)
     optimizer = torch.optim.Adam(lr=learning_rate, params=model.parameters())
 
     # Schedule to 0.1 times the initial rate
@@ -132,19 +141,34 @@ if __name__ == "__main__":
     best_im = None
 
     tbar = tqdm.tqdm(range(niters))
+    result = torch.zeros_like(imten).to(device)
+
     for idx in tbar:
-        # Estimate image
-        img_estim = model(coords).reshape(-1, H, W)[None, ...]
+        indices = torch.randperm(H * W)
 
-        # Compute sinogram
-        sinogram_estim = lin_inverse.radon(img_estim, thetas)
+        train_loss = cnt = 0
+        for b_idx in range(0, H * W, maxpoints):
+            b_indices = indices[b_idx : min(H * W, b_idx + maxpoints)]
+            b_coords = coords[:, b_indices, ...].cuda()
+            b_indices = b_indices.cuda()
 
-        loss = ((sinogram_ten - sinogram_estim) ** 2).mean()
+            # Estimate image
+            img_estim = model(b_coords).reshape(-1, H, W)[None, ...]
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        scheduler.step()
+            # Compute sinogram
+            sinogram_estim = lin_inverse.radon(img_estim, thetas)
+
+            with torch.no_grad():
+                result[:, b_indices, :] = img_estim
+
+            loss = ((sinogram_ten[:, b_indices, :] - sinogram_estim) ** 2).mean()
+            train_loss += loss.item()
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            cnt += 1
 
         with torch.no_grad():
             img_estim_cpu = img_estim.detach().cpu().squeeze().numpy()
@@ -166,12 +190,12 @@ if __name__ == "__main__":
             ssim2 = ssim_func(img, img_estim_cpu)
 
             if os.getenv("WANDB_LOG") in ["true", "True", True]:
-                xp.log({"loss": loss, "psnr": psnr2, "ssim": ssim2})
+                xp.log({"loss": train_loss / cnt, "psnr": psnr2, "ssim": ssim2})
 
     img_estim_cpu = best_im.detach().cpu().squeeze().numpy()
 
     mdict = {
-        "rec": img_estim_cpu,
+        "result": img_estim_cpu,
         "loss_array": loss_array,
         "sinogram": sinogram,
         "gt": img,
