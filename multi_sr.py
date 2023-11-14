@@ -89,7 +89,7 @@ if __name__ == "__main__":
     use_gt = True  # Use ground truth calibration info
 
     # Neural network constants
-    batch_size = 4  # Image batch size
+    batch_size = 2  # Image batch size
     img_every = 4  # Display result every these iterations
 
     # Network parameters
