@@ -37,7 +37,7 @@ if __name__ == "__main__":
         "--input_vol",
         type=str,
         help="Path to input volume",
-        default="./data/thai_statue.mat",
+        default="thai_statue",
     )
     parser.add_argument(
         "-n",

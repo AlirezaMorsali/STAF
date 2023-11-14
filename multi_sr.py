@@ -106,8 +106,6 @@ if __name__ == "__main__":
     )
     H, W, _ = im.shape
 
-    H, W, _ = im.shape
-
     # Create a stack of images. Do not resize yet.
     data = motion.get_imstack(im, 1, shift_max, theta_max, nshifts=nimg)
 
