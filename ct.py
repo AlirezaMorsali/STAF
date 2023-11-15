@@ -79,8 +79,6 @@ if __name__ == "__main__":
     hidden_layers = 2  # Number of hidden layers in the MLP
     hidden_features = 300  # Number of hidden units per layer
 
-    maxpoints = 128 * 128 # batch size
-
     # Generate sampling angles
     thetas = torch.tensor(np.linspace(0, 180, nmeas, dtype=np.float32)).cuda()
 
@@ -148,31 +146,18 @@ if __name__ == "__main__":
     result = torch.zeros_like(imten).to(device)
 
     for idx in tbar:
-        indices = torch.randperm(H * W)
+        # Estimate image
+        img_estim = model(coords).reshape(-1, H, W)[None, ...]
 
-        train_loss = cnt = 0
-        for b_idx in range(0, H * W, maxpoints):
-            b_indices = indices[b_idx : min(H * W, b_idx + maxpoints)]
-            b_coords = coords[:, b_indices, ...].cuda()
-            b_indices = b_indices.cuda()
+        # Compute sinogram
+        sinogram_estim = lin_inverse.radon(img_estim, thetas)
 
-            # Estimate image
-            img_estim = model(b_coords).reshape(-1, H, W)[None, ...]
+        loss = ((sinogram_ten - sinogram_estim) ** 2).mean()
 
-            # Compute sinogram
-            sinogram_estim = lin_inverse.radon(img_estim, thetas)
-
-            with torch.no_grad():
-                result[:, b_indices, :] = img_estim
-
-            loss = ((sinogram_ten[:, b_indices, :] - sinogram_estim) ** 2).mean()
-            train_loss += loss.item()
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            cnt += 1
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        scheduler.step()
 
         with torch.no_grad():
             img_estim_cpu = img_estim.detach().cpu().squeeze().numpy()
