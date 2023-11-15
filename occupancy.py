@@ -18,6 +18,10 @@ import numpy as np
 from scipy import io
 from scipy import ndimage
 import cv2
+import tripy
+import numpy as np
+from plyfile import PlyData, PlyElement
+import scipy.io
 
 import torch
 from torch.optim.lr_scheduler import LambdaLR
@@ -68,15 +72,16 @@ if __name__ == "__main__":
     maxpoints = int(2e5)  # Batch size
 
     if os.getenv("WANDB_LOG") in ["true", "True", True]:
-        run_name = f'{nonlin}_occupancy__{str(time.time()).replace(".", "_")}'
+        run_name = f'{nonlin}_{expname}_occupancy__{str(time.time()).replace(".", "_")}'
         xp = wandb.init(
             name=run_name, project="pracnet", resume="allow", anonymous="allow"
         )
 
-    if expname == "thai_statue":
-        occupancy = True
-    else:
-        occupancy = False
+    occupancy = True
+    # if expname == "thai_statue":
+    #     occupancy = True
+    # else:
+    #     occupancy = False
 
     # Load image and scale
     im = io.loadmat("data/%s.mat" % expname)["hypercube"].astype(np.float32)
@@ -217,8 +222,11 @@ if __name__ == "__main__":
         "nparams": utils.count_parameters(model),
     }
 
+    mat_save_path = os.path.join(
+        os.getenv("RESULTS_SAVE_PATH"), f"{expname}_{nonlin}.mat"
+    )
     io.savemat(
-        os.path.join(BASE_PATH, "%s" % expname, "%s.mat" % nonlin),
+        mat_save_path,
         mdict,
     )
 
@@ -250,5 +258,30 @@ if __name__ == "__main__":
         ),
     )
 
-    print("saving the image on WANDB")
-    wandb.log({f"{nonlin}_occupancy": [wandb.Image(best_img, caption="Occupancy reuslt.")]})
+    print("saving the mesh on WANDB")
+
+    mat_data = scipy.io.loadmat(mat_save_path)
+
+    vertices = mat_data["vertices"]
+    faces = mat_data["faces"]
+
+    triangles = np.array(tripy.earclip(vertices, faces))
+
+    vertex_properties = [("x", "float32"), ("y", "float32"), ("z", "float32")]
+    face_properties = [("vertex_indices", "int32", "int32")]
+
+    mesh = PlyData(
+        [
+            PlyElement.describe(vertices, "vertex", vertex_properties),
+            PlyElement.describe(triangles, "face", face_properties),
+        ]
+    )
+    mesh_save_path = os.path.join(
+        os.getenv("RESULTS_SAVE_PATH"), f"{expname}_{nonlin}_mesh.ply"
+    )
+    mesh.write(mesh_save_path)
+
+    artifact = wandb.Artifact("3d_mesh", type="mesh")
+    artifact.add_file(mesh_save_path, f"{expname}_{nonlin}_mesh.ply")
+
+    wandb.log_artifact(artifact)
