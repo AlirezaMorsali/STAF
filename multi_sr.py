@@ -38,13 +38,6 @@ from modules import utils
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Multi SR parameters")
     parser.add_argument(
-        "-i",
-        "--input_image",
-        type=str,
-        help="Path to input image",
-        default="./data/kodak.png",
-    )
-    parser.add_argument(
         "-n",
         "--nonlinearity",
         choices=["wire", "siren", "mfn", "relu", "posenc", "gauss"],
@@ -53,15 +46,8 @@ if __name__ == "__main__":
         default="parac",
     )
     args = parser.parse_args()
-
-    image_path = args.input_image
+    
     nonlin = args.nonlinearity
-
-    if os.getenv("WANDB_LOG") in ["true", "True", True]:
-        run_name = f'{nonlin}_multi_sr__{str(time.time()).replace(".", "_")}'
-        xp = wandb.init(
-            name=run_name, project="pracnet", resume="allow", anonymous="allow"
-        )
 
     niters = 2000  # Number of SGD iterations
     learning_rate = 5e-3  # Learning rate.
@@ -96,9 +82,19 @@ if __name__ == "__main__":
     hidden_layers = 2  # Number of hidden layers in the MLP
     hidden_features = 256  # Number of hidden units per layer
 
+    image_name_ext = "kodak.png"
+    image_name = image_name_ext.split(".")[0]
+    image_path = os.path.join("data", image_name_ext)
+    
+    if os.getenv("WANDB_LOG") in ["true", "True", True]:
+        run_name = f'{nonlin}_{image_name}_multi_sr__{str(time.time()).replace(".", "_")}'
+        xp = wandb.init(
+            name=run_name, project="pracnet", resume="allow", anonymous="allow"
+        )
+
     # Read image
     im = cv2.resize(
-        plt.imread(args.input_image),
+        plt.imread(image_path),
         None,
         fx=scaling,
         fy=scaling,
@@ -317,4 +313,10 @@ if __name__ == "__main__":
     )
 
     print("saving the image on WANDB")
-    wandb.log({f"{nonlin}_multi_sr": [wandb.Image(img_full, caption="Multi resolution image.")]})
+    wandb.log(
+        {
+            f"{nonlin}_multi_sr": [
+                wandb.Image(img_full, caption="Multi resolution image.")
+            ]
+        }
+    )

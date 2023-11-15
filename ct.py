@@ -85,13 +85,17 @@ if __name__ == "__main__":
     thetas = torch.tensor(np.linspace(0, 180, nmeas, dtype=np.float32)).cuda()
 
     # Create phantom
-    img = cv2.imread(input_image).astype(np.float32)[..., 1]
+    image_name_ext = "chest.png"
+    image_name = image_name_ext.split(".")[0]
+    image_path = os.path.join("data", image_name_ext)
+
+    img = cv2.imread(image_path).astype(np.float32)[..., 1]
     img = utils.normalize(img, True)
     [H, W] = img.shape
     imten = torch.tensor(img)[None, None, ...].cuda()
 
     if os.getenv("WANDB_LOG") in ["true", "True", True]:
-        run_name = f'{nonlin}_ct__{str(time.time()).replace(".", "_")}'
+        run_name = f'{nonlin}_{image_name}_ct__{str(time.time()).replace(".", "_")}'
         xp = wandb.init(
             name=run_name, project="pracnet", resume="allow", anonymous="allow"
         )
@@ -230,5 +234,6 @@ if __name__ == "__main__":
     )
 
     print("saving the CT image on WANDB")
-    wandb.log({f"{nonlin}_ct": [wandb.Image(img_estim_cpu, caption=f"Ct image {nonlin}")]})
-
+    wandb.log(
+        {f"{nonlin}_ct": [wandb.Image(img_estim_cpu, caption=f"Ct image {nonlin}")]}
+    )
