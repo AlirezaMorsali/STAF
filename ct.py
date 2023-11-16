@@ -179,7 +179,7 @@ if __name__ == "__main__":
             ssim2 = ssim_func(img, img_estim_cpu)
 
             if os.getenv("WANDB_LOG") in ["true", "True", True]:
-                xp.log({"loss": loss_gt.item(), "psnr": psnr2, "ssim": ssim2})
+                xp.log({"loss": loss.item(), "psnr": psnr2, "ssim": ssim2})
 
     img_estim_cpu = best_im.detach().cpu().squeeze().numpy()
 
