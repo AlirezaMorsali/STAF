@@ -40,7 +40,7 @@ class Parasin(nn.Module):
         # ):
         super().__init__()
 
-        self.nf = 25
+        self.nf = 5
         self.omega_0 = omega_0
         self.is_first = is_first
 
@@ -51,9 +51,13 @@ class Parasin(nn.Module):
         # ws = omega_0 * torch.rand(self.nf)
         ws = omega_0 * torch.ones(self.nf)
         self.ws = nn.Parameter(ws, requires_grad=True)
-        self.phis = nn.Parameter(requires_grad=True)
-        self.bs = nn.Parameter(requires_grad=True)
-        self.init_weights()
+        # self.phis = nn.Parameter(requires_grad=True)
+        # self.bs = nn.Parameter(requires_grad=True)
+        # self.init_weights()
+
+        self.bs = nn.Parameter(torch.ones(self.nf), requires_grad=True)
+        self.phis = nn.Parameter(torch.zeros(self.nf), requires_grad=True)
+        self.siren_init_weights()
 
     def init_weights(self):
         with torch.no_grad():
