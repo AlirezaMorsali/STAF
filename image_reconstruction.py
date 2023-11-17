@@ -97,7 +97,7 @@ input_image = plt.imread(img_path)
 if args.resize:
     input_image = cv2.resize(input_image, (args.resize, args.resize))
 im = utils.normalize(input_image.astype(np.float32), True)
-# im = cv2.resize(im, None, fx=1 / 4, fy=1 / 4, interpolation=cv2.INTER_AREA)
+im = cv2.resize(im, None, fx=1 / 2, fy=1 / 2, interpolation=cv2.INTER_AREA)
 
 imsh = im.shape
 (
