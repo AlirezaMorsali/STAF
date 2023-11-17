@@ -45,6 +45,13 @@ parser.add_argument(
     default="parac",
 )
 parser.add_argument(
+    "-e",
+    "--epochs",
+    type=int,
+    help="Epcohs of training",
+    default=250
+)
+parser.add_argument(
     "-s",
     "--resize",
     type=int,
@@ -66,8 +73,6 @@ if os.getenv("WANDB_LOG") in ["true", "True", True]:
     )
     xp = wandb.init(name=run_name, project="pracnet", resume="allow", anonymous="allow")
 
-
-niters = 250  # Number of SGD iterations
 learning_rate = 1e-3  # Learning rate.
 
 # WIRE works best at 5e-3 to 2e-2, Gauss and SIREN at 1e-3 - 2e-3,
@@ -151,7 +156,7 @@ optim = torch.optim.Adam(
 )
 
 # Schedule to reduce lr to 0.1 times the initial rate in final epoch
-scheduler = LambdaLR(optim, lambda x: 0.1 ** min(x / niters, 1))
+scheduler = LambdaLR(optim, lambda x: 0.1 ** min(x / args.epochs, 1))
 
 x = torch.linspace(-1, 1, W)
 y = torch.linspace(-1, 1, H)
@@ -164,8 +169,8 @@ gt = image_tensor.reshape(H * W, imdim)[None, ...].to(device)
 gt_tensor = torch.tensor(im_noisy)
 gt_noisy = gt_tensor.reshape(H * W, imdim)[None, ...].to(device)
 
-mse_array = torch.zeros(niters, device=device)
-mse_loss_array = torch.zeros(niters, device=device)
+mse_array = torch.zeros(args.epochs, device=device)
+mse_loss_array = torch.zeros(args.epochs, device=device)
 time_array = torch.zeros_like(mse_array)
 
 best_mse = torch.tensor(float("inf"))
@@ -173,7 +178,7 @@ best_img = None
 
 rec = torch.zeros_like(gt).to(device)
 
-tbar = tqdm(range(niters))
+tbar = tqdm(range(args.epochs))
 init_time = time.time()
 
 b_coords = coords.to(device)
