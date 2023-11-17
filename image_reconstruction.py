@@ -33,8 +33,8 @@ parser.add_argument(
     "-i",
     "--input_image",
     type=str,
-    help="Path to input image",
-    default="./data/cameraman.tif",
+    help="Input image name",
+    default="cameraman.tif",
 )
 parser.add_argument(
     "-n",
@@ -42,8 +42,6 @@ parser.add_argument(
     choices=["wire", "siren", "mfn", "relu", "posenc", "gauss"],
     type=str,
     help="Name of nonlinearity",
-    # default="siren",
-    # default="wire",
     default="parac",
 )
 parser.add_argument(
@@ -55,12 +53,17 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-image_path = args.input_image
+img_name_ext = args.input_image
+img_name = img_name_ext.split(".")[0]
+img_path = os.path.join("data", img_name_ext)
+
 nonlin = args.nonlinearity
 # "posenc"  # type of nonlinearity, 'wire', 'siren', 'mfn', 'relu', 'posenc', 'gauss'
 
 if os.getenv("WANDB_LOG") in ["true", "True", True]:
-    run_name = f'{nonlin}_image_denoise__{str(time.time()).replace(".", "_")}'
+    run_name = (
+        f'{nonlin}_{img_name}_image_denoise__{str(time.time()).replace(".", "_")}'
+    )
     xp = wandb.init(name=run_name, project="pracnet", resume="allow", anonymous="allow")
 
 
@@ -85,7 +88,7 @@ maxpoints = 128 * 128  # Batch size
 
 # Read image and scale. A scale of 0.5 for parrot image ensures that it
 # fits in a 12GB GPU
-input_image = plt.imread(image_path)
+input_image = plt.imread(img_path)
 if args.resize:
     input_image = cv2.resize(input_image, (args.resize, args.resize))
 im = utils.normalize(input_image.astype(np.float32), True)
@@ -244,7 +247,7 @@ io.savemat(
     os.path.join(
         os.getenv("RESULTS_SAVE_PATH"),
         "denoising",
-        "%s.mat" % nonlin,
+        f"{nonlin}_{img_name}.mat",
     ),
     mdict,
 )
@@ -262,7 +265,7 @@ torch.save(
     os.path.join(
         os.getenv("MODEL_SAVE_PATH"),
         "denoising",
-        "%s.pth" % nonlin,
+        f"{nonlin}_{img_name}.pth",
     ),
 )
 
@@ -273,11 +276,18 @@ torch.save(
 # axes[1].title.set_text(f"{nonlin}")
 # plt.savefig(f"results/Original-vs-{nonlin}.png")  # Save as PNG image
 
-# plt.savefig(
-#     os.path.join(
-#         os.getenv("RESULTS_SAVE_PATH"), "denoising", f"Original-vs-{nonlin}.png"
-#     )
-# )
+plt.imshow(best_img)
+plt.savefig(
+    os.path.join(
+        os.getenv("RESULTS_SAVE_PATH"), "denoising", f"{nonlin}_{img_name}.png"
+    )
+)
 
 print("saving the image on WANDB")
-wandb.log({f"{nonlin}_image_reconst": [wandb.Image(best_img, caption="Reconstructed image.")]})
+wandb.log(
+    {
+        f"{nonlin}_{img_name}_image_reconst": [
+            wandb.Image(best_img, caption="Reconstructed image.")
+        ]
+    }
+)
