@@ -1,8 +1,0 @@
-data/PXL_20230423_164439671.mp4 filter=lfs diff=lfs merge=lfs -text
-data/chest.png filter=lfs diff=lfs merge=lfs -text
-data/kodak.png filter=lfs diff=lfs merge=lfs -text
-data/parrot.png filter=lfs diff=lfs merge=lfs -text
-data/thai_statue.mat filter=lfs diff=lfs merge=lfs -text
-data/cameraman.tif filter=lfs diff=lfs merge=lfs -text
-data/5.1.13.tiff filter=lfs diff=lfs merge=lfs -text
-data/Gray21[[:space:]]512.tiff filter=lfs diff=lfs merge=lfs -text
