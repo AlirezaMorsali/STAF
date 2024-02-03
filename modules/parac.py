@@ -1,14 +1,9 @@
-#!/usr/bin/env python
-
-import pdb
-import math
-
 import numpy as np
 
 import torch
 from torch import nn
 
-from .utils import build_montage, normalize
+from modules.inr import INR
 
 
 class Parasin(nn.Module):
@@ -35,9 +30,6 @@ class Parasin(nn.Module):
         scale=10.0,
         init_weights=True,
     ):
-        # def __init__(
-        # self, in_features, out_features, nf, bias=True, is_first=False, omega_0=30
-        # ):
         super().__init__()
 
         self.nf = 5
@@ -46,14 +38,8 @@ class Parasin(nn.Module):
 
         self.in_features = in_features
         self.linear = nn.Linear(in_features, out_features, bias=bias)
-        # self.ws = nn.Parameter(torch.ones(self.nf), requires_grad=True)
-
-        # ws = omega_0 * torch.rand(self.nf)
         ws = omega_0 * torch.ones(self.nf)
         self.ws = nn.Parameter(ws, requires_grad=True)
-        # self.phis = nn.Parameter(requires_grad=True)
-        # self.bs = nn.Parameter(requires_grad=True)
-        # self.init_weights()
 
         self.bs = nn.Parameter(torch.ones(self.nf), requires_grad=True)
         self.phis = nn.Parameter(torch.zeros(self.nf), requires_grad=True)
@@ -95,88 +81,20 @@ class Parasin(nn.Module):
                 )
 
     def forward(self, input):
-        # return torch.sin(self.omega_0 * self.linear(input))
-        # temp = self.omega_0 * self.linear(input)
-        temp = self.linear(input)
-        # print(temp.shape)
-        return self.param_act(temp, self.ws, self.bs, self.phis)
+        return self.param_act(self.linear(input), self.ws, self.bs, self.phis)
 
     def param_act(self, linout, ws, bs, phis):
         linoutx = linout.unsqueeze(-1).repeat_interleave(ws.shape[0], dim=3)
         wsx = ws.expand(linout.shape[0], linout.shape[1], linout.shape[2], -1)
         bsx = bs.expand(linout.shape[0], linout.shape[1], linout.shape[2], -1)
         phisx = phis.expand(linout.shape[0], linout.shape[1], linout.shape[2], -1)
-        temp = bsx * (torch.sin((wsx * linoutx) + phisx))
+        temp = bsx * (torch.sin((wsx * linoutx) + phisx)) # ! better names
         temp2 = torch.sum(temp, 3)
-        # print(f"Activation Call input size:{linout.shape}")
-        # print(f"Activation Call output size:{temp2.shape}")
         return temp2
 
+class ParacNet(INR):
+    def __init__(self, in_features, hidden_features, hidden_layers, out_features, outermost_linear=True, first_omega_0=30, hidden_omega_0=30, scale=10, pos_encode=False, sidelength=512, fn_samples=None, use_nyquist=True):
+        non_linearity = Parasin
+        super().__init__(non_linearity, in_features, hidden_features, hidden_layers, out_features, outermost_linear, first_omega_0, hidden_omega_0, scale, pos_encode, sidelength, fn_samples, use_nyquist)
 
-class INR(nn.Module):
-    def __init__(
-        self,
-        in_features,
-        hidden_features,
-        hidden_layers,
-        out_features,
-        outermost_linear=True,
-        first_omega_0=30,
-        hidden_omega_0=30.0,
-        scale=10.0,
-        pos_encode=False,
-        sidelength=512,
-        fn_samples=None,
-        use_nyquist=True,
-    ):
-        super().__init__()
-        self.pos_encode = pos_encode
-        self.nonlin = Parasin
 
-        self.net = []
-        self.net.append(
-            self.nonlin(
-                in_features,
-                hidden_features,
-                is_first=True,
-                omega_0=first_omega_0,
-                scale=scale,
-            )
-        )
-
-        for i in range(hidden_layers):
-            self.net.append(
-                self.nonlin(
-                    hidden_features,
-                    hidden_features,
-                    is_first=False,
-                    omega_0=hidden_omega_0,
-                    scale=scale,
-                )
-            )
-
-        if outermost_linear:
-            dtype = torch.float
-            final_linear = nn.Linear(hidden_features, out_features, dtype=dtype)
-
-            self.net.append(final_linear)
-        else:
-            self.net.append(
-                self.nonlin(
-                    hidden_features,
-                    out_features,
-                    is_first=False,
-                    omega_0=hidden_omega_0,
-                    scale=scale,
-                )
-            )
-
-        self.net = nn.Sequential(*self.net)
-
-    def forward(self, coords):
-        if self.pos_encode:
-            coords = self.positional_encoding(coords)
-
-        output = self.net(coords)
-
-        return output

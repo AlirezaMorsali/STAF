@@ -5,6 +5,7 @@ from tqdm import tqdm
 import time
 import cv2
 import argparse
+import wandb
 
 import numpy as np
 from scipy import io
@@ -14,58 +15,222 @@ import torch
 import torch.nn
 from torch.optim.lr_scheduler import LambdaLR
 
-from modules import models
 from modules import utils
 
-import wandb
+from modules.parac import ParacNet
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"using {device}")
 
 
-# Check if CUDA (GPU) is available
-if torch.cuda.is_available():
-    device = torch.device("cuda")
-    print("CUDA is available. Using GPU.")
-else:
-    device = torch.device("cpu")
-    print("CUDA is not available. Using CPU.")
+def get_args():
+    parser = argparse.ArgumentParser(description="Image reconstruction parameters")
+    parser.add_argument(
+        "-i",
+        "--input_image",
+        type=str,
+        help="Input image name.",
+        default="cameraman.tif",
+    )
+    parser.add_argument(
+        "-n",
+        "--nonlinearity",
+        choices=["wire", "siren", "mfn", "relu", "relu+posenc", "gauss", "parac"],
+        type=str,
+        help="Name of nonlinearity",
+        default="parac",
+    )
+    parser.add_argument(
+        "-e", "--epochs", type=int, help="Epcohs of training", default=250
+    )
+    parser.add_argument(
+        "-s",
+        "--resize",
+        type=int,
+        default=None,
+        help="If not None resize to the provided size",
+    )
 
-parser = argparse.ArgumentParser(description="Image reconstruction parameters")
-parser.add_argument(
-    "-i",
-    "--input_image",
-    type=str,
-    help="Input image name",
-    default="cameraman.tif",
-)
-parser.add_argument(
-    "-n",
-    "--nonlinearity",
-    choices=["wire", "siren", "mfn", "relu", "posenc", "gauss"],
-    type=str,
-    help="Name of nonlinearity",
-    default="parac",
-)
-parser.add_argument(
-    "-e",
-    "--epochs",
-    type=int,
-    help="Epcohs of training",
-    default=250
-)
-parser.add_argument(
-    "-s",
-    "--resize",
-    type=int,
-    default=None,
-    help="If not None resize to the provided size",
-)
-args = parser.parse_args()
+    return parser.parse_args()
+
+
+def get_model(
+    non_linearity,
+    img_width,
+    img_height,
+    hidden_features,
+    hidden_layers,
+    out_features,
+    outermost_linear=True,
+    first_omega_0=30,
+    hidden_omega_0=30,
+    scale=10,
+    sidelength=512,
+    fn_samples=None,
+    use_nyquist=True,
+):
+    """
+    Function to get a class instance for a given type of
+    implicit neural representation
+
+    Inputs:
+        non_linearity: One of 'paract', 'gauss', 'mfn', 'relu+posenc', 'siren',
+            'wire', 'wire2d'
+        in_features: Number of input features. 2 for image,
+            3 for volume and so on.
+        hidden_features: Number of features per hidden layer
+        hidden_layers: Number of hidden layers
+        out_features; Number of outputs features. 3 for color
+            image, 1 for grayscale or volume and so on
+        outermost_linear (True): If True, do not apply non_linearity
+            just before output
+        first_omega0 (30): For siren and wire only: Omega
+            for first layer
+        hidden_omega0 (30): For siren and wire only: Omega
+            for hidden layers
+        scale (10): For wire and gauss only: Scale for
+            Gaussian window
+        pos_encode (False): If True apply positional encoding
+        sidelength (512): if pos_encode is true, use this
+            for side length parameter
+        fn_samples (None): Redundant parameter
+        use_nyquist (True): if True, use nyquist sampling for
+            positional encoding
+    Output: Model instance
+    """
+
+    from modules import gauss
+    from modules import mfn
+    from modules import relu
+    from modules import siren
+    from modules import wire
+
+    sidelength = (
+        int(max(img_height, img_width))
+        if non_linearity == "relu+posenc"
+        else img_height
+    )
+
+    # ? excessive params?
+    if non_linearity == "parac":
+        model = ParacNet(
+            in_features=2,
+            hidden_features=hidden_features,
+            hidden_layers=hidden_layers,
+            out_features=out_features,
+            outermost_linear=outermost_linear,
+            first_omega_0=first_omega_0,
+            hidden_omega_0=hidden_omega_0,
+            scale=scale,
+            pos_encode=False,
+            sidelength=sidelength,
+            fn_samples=fn_samples,
+            use_nyquist=use_nyquist,
+        )
+
+    elif non_linearity == "siren":
+        model = siren.INR(
+            in_features=2,
+            hidden_features=hidden_features,
+            hidden_layers=hidden_layers,
+            out_features=out_features,
+            outermost_linear=outermost_linear,
+            first_omega_0=first_omega_0,
+            hidden_omega_0=hidden_omega_0,
+            scale=scale,
+            pos_encode=False,
+            sidelength=sidelength,
+            fn_samples=fn_samples,
+            use_nyquist=use_nyquist,
+        )
+
+    elif non_linearity == "wire":
+        model = wire.INR(
+            in_features=2,
+            hidden_features=hidden_features,
+            hidden_layers=hidden_layers,
+            out_features=out_features,
+            outermost_linear=outermost_linear,
+            first_omega_0=first_omega_0,
+            hidden_omega_0=hidden_omega_0,
+            scale=scale,
+            pos_encode=False,
+            sidelength=sidelength,
+            fn_samples=fn_samples,
+            use_nyquist=use_nyquist,
+        )
+    elif non_linearity == "gauss":
+        model = gauss.INR(
+            in_features=2,
+            hidden_features=hidden_features,
+            hidden_layers=hidden_layers,
+            out_features=out_features,
+            outermost_linear=outermost_linear,
+            first_omega_0=first_omega_0,
+            hidden_omega_0=hidden_omega_0,
+            scale=scale,
+            pos_encode=False,
+            sidelength=sidelength,
+            fn_samples=fn_samples,
+            use_nyquist=use_nyquist,
+        )
+    elif non_linearity == "mfn":
+        model = mfn.INR(
+            in_features=2,
+            hidden_features=hidden_features,
+            hidden_layers=hidden_layers,
+            out_features=out_features,
+            outermost_linear=outermost_linear,
+            first_omega_0=first_omega_0,
+            hidden_omega_0=hidden_omega_0,
+            scale=scale,
+            pos_encode=False,
+            sidelength=sidelength,
+            fn_samples=fn_samples,
+            use_nyquist=use_nyquist,
+        )
+    elif non_linearity == "relu":
+        model = relu.INR(
+            in_features=2,
+            hidden_features=hidden_features,
+            hidden_layers=hidden_layers,
+            out_features=out_features,
+            outermost_linear=outermost_linear,
+            first_omega_0=first_omega_0,
+            hidden_omega_0=hidden_omega_0,
+            scale=scale,
+            pos_encode=False,
+            sidelength=sidelength,
+            fn_samples=fn_samples,
+            use_nyquist=use_nyquist,
+        )
+
+    elif non_linearity == "relu+posenc":
+        model = relu.INR(
+            in_features=2,
+            hidden_features=hidden_features,
+            hidden_layers=hidden_layers,
+            out_features=out_features,
+            outermost_linear=outermost_linear,
+            first_omega_0=first_omega_0,
+            hidden_omega_0=hidden_omega_0,
+            scale=scale,
+            pos_encode=True,
+            sidelength=sidelength,
+            fn_samples=fn_samples,
+            use_nyquist=use_nyquist,
+        )
+
+    return model
+
+
+args = get_args()
 
 img_name_ext = args.input_image
 img_name = img_name_ext.split(".")[0]
 img_path = os.path.join("data", img_name_ext)
 
 nonlin = args.nonlinearity
-# "posenc"  # type of nonlinearity, 'wire', 'siren', 'mfn', 'relu', 'posenc', 'gauss'
 
 if os.getenv("WANDB_LOG") in ["true", "True", True]:
     run_name = (
@@ -78,7 +243,6 @@ learning_rate = 1e-3  # Learning rate.
 # WIRE works best at 5e-3 to 2e-2, Gauss and SIREN at 1e-3 - 2e-3,
 # MFN at 1e-2 - 5e-2, and positional encoding at 5e-4 to 1e-3
 
-tau = 3e7  # Photon noise (max. mean lambda). Set to 3e7 for representation, 3e1 for denoising
 noise_snr = 2  # Readout noise (dB)
 
 # Gabor filter constants.
@@ -114,37 +278,19 @@ else:
     imdim = 3
 
 # Create a noisy image
-# im_noisy = utils.measure(im, noise_snr, tau)
 im_noisy = im
 
-if nonlin == "posenc":
-    nonlin = "relu"
-    posencode = True
-
-    if tau < 100:
-        sidelength = int(max(H, W) / 3)
-    else:
-        sidelength = int(max(H, W))
-
-else:
-    posencode = False
-    sidelength = H
-
-model = models.get_INR(
-    nonlin=nonlin,
-    in_features=2,
+model = get_model(
+    non_linearity=nonlin,
+    img_width=W,
+    img_height=H,
     out_features=imdim,
     hidden_features=hidden_features,
     hidden_layers=hidden_layers,
     first_omega_0=omega0,
     hidden_omega_0=omega0,
     scale=sigma0,
-    pos_encode=posencode,
-    sidelength=sidelength,
-)
-
-# Send model to Device
-model.to(device)
+).to(device)
 
 print("Number of parameters: ", utils.count_parameters(model))
 print("Input PSNR: %.2f dB" % utils.psnr(im, im_noisy))
@@ -189,8 +335,8 @@ for epoch in tbar:
     train_loss = cnt = 0
     for b_idx in range(0, H * W, maxpoints):
         b_indices = indices[b_idx : min(H * W, b_idx + maxpoints)]
-        b_coords = coords[:, b_indices, ...].cuda()
-        b_indices = b_indices.cuda()
+        b_coords = coords[:, b_indices, ...].to(device)
+        b_indices = b_indices.to(device)
         pixelvalues = model(b_coords)
 
         with torch.no_grad():
@@ -232,8 +378,6 @@ for epoch in tbar:
         best_mse = mse_array[epoch]
         best_img = imrec
 
-if posencode:
-    nonlin = "posenc"
 
 mdict = {
     "rec": best_img,
