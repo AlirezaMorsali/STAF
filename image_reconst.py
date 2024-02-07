@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import math
 import os
 import skimage
 from tqdm import tqdm
@@ -9,7 +10,6 @@ import argparse
 import wandb
 
 import numpy as np
-from scipy import io
 import matplotlib.pyplot as plt
 
 import torch
@@ -39,24 +39,75 @@ def get_args():
     )
     parser.add_argument(
         "-n",
-        "--nonlinearity",
+        "--non_linearity",
         choices=["parac"],
         type=str,
-        help="Name of nonlinearity",
+        help="Name of non linearity",
         default="parac",
     )
     parser.add_argument(
         "-e", "--epochs", type=int, help="Epcohs of maining", default=250
     )
     parser.add_argument(
-        "-s",
-        "--resize",
+        "--lr",
         type=int,
-        default=None,
-        help="If not None resize to the provided size",
+        default=1e-4,
+        help="Learning rate. Parac works best at 1e-4",
+    )
+    parser.add_argument(
+        "-b",
+        "--batch_size",
+        type=int,
+        default=128 * 128,
+        help="Batch size. Suggestion: (2^n)*(2^n), aka powers of two. For example: 128*128",
+    )
+    parser.add_argument(
+        "--live",
+        type=bool,
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help="Whether to show the reconstructed image live during the training or not.",
     )
 
     return parser.parse_args()
+
+
+def save_results(train_name, best_image, model, results_saving_path, model_saving_path):
+    # save model
+    os.makedirs(
+        model_saving_path,
+        exist_ok=True,
+    )
+    torch.save(
+        model.state_dict(),
+        os.path.join(
+            model_saving_path,
+            f"{train_name}.pth",
+        ),
+    )
+
+    # saving the results
+    os.makedirs(
+        results_saving_path,
+        exist_ok=True,
+    )
+    plt.imshow(best_image)
+    plt.savefig(
+        os.path.join(
+            results_saving_path,
+            f"{train_name}.png",
+        )
+    )
+
+    if os.getenv("WANDB_LOG") in ["true", "True", True]:
+        print("saving the image on WANDB")
+        wandb.log(
+            {
+                f"image_reconst | {train_name}": [
+                    wandb.Image(best_image, caption="Reconstructed image.")
+                ]
+            }
+        )
 
 
 def get_model(
@@ -142,216 +193,126 @@ def load_image_data(image_name):
         )
 
 
-def main():
-    args = get_args()
-
-    nonlin = args.nonlinearity
-
-    if os.getenv("WANDB_LOG") in ["true", "True", True]:
-        run_name = f'{nonlin}_{args.input_image}_image_denoise__{str(time.time()).replace(".", "_")}'
-        xp = wandb.init(
-            name=run_name, project="pracnet", resume="allow", anonymous="allow"
-        )
-
-    learning_rate = 1e-3  # Learning rate.
-
-    # WIRE works best at 5e-3 to 2e-2, Gauss and SIREN at 1e-3 - 2e-3,
-    # MFN at 1e-2 - 5e-2, and positional encoding at 5e-4 to 1e-3
-
-    noise_snr = 2  # Readout noise (dB)
-
+def train(args, wandb_xp=None):
+    # ? what to do w/ these?
     # Gabor filter constants.
-    # We suggest omega0 = 4 and sigma0 = 4 for denoising, and omega0=20, sigma0=30 for image representation
+    # We suggest omega0 = 4 and sigma0 = 4 for reconst, and omega0=20, sigma0=30 for image representation
     omega0 = 30.0  # Frequency of sinusoid
     sigma0 = 4.0  # Sigma of Gaussian
 
-    # Network parameters
-    hidden_layers = 3  # Number of hidden layers in the MLP
-    hidden_features = 256  # Number of hidden units per layer
-    maxpoints = 128 * 128  # Batch size
+    img = load_image_data(args.input_image)
+    img = utils.normalize(img.astype(np.float32), full_normalize=True)
+    img = cv2.resize(img, None, fx=1 / 2, fy=1 / 2, interpolation=cv2.INTER_AREA)
 
-    input_image = load_image_data(args.input_image)
-
-    if args.resize:
-        input_image = cv2.resize(input_image, (args.resize, args.resize))
-    im = utils.normalize(input_image.astype(np.float32), True)
-    im = cv2.resize(im, None, fx=1 / 16, fy=1 / 16, interpolation=cv2.INTER_AREA)
-
-    imsh = im.shape
-    (
-        H,
-        W,
-    ) = (
-        imsh[0],
-        imsh[1],
-    )
-    if len(imsh) == 2:
-        imdim = 1
-        im = im[:, :, np.newaxis]
+    H, W = img.shape[0], img.shape[1]
+    if len(img.shape) == 2:
+        # grayscale image
+        img_dim = 1
+        img = img[:, :, np.newaxis]  # ?
     else:
-        imdim = 3
-
-    # Create a noisy image
-    im_noisy = im
+        # rgb image
+        img_dim = 3
 
     model = get_model(
-        non_linearity=nonlin,
-        out_features=imdim,
-        hidden_features=hidden_features,
-        hidden_layers=hidden_layers,
+        non_linearity=args.non_linearity,
+        out_features=img_dim,
+        hidden_features=256,
+        hidden_layers=3,
         first_omega_0=omega0,
         hidden_omega_0=omega0,
         scale=sigma0,
     ).to(device)
 
     print("Number of parameters: ", utils.count_parameters(model))
-    print("Input PSNR: %.2f dB" % utils.psnr(im, im_noisy))
 
     optim = torch.optim.Adam(
-        lr=1e-4, betas=(0.9, 0.999), eps=1e-08, params=model.parameters()
+        lr=args.lr, betas=(0.9, 0.999), eps=1e-08, params=model.parameters()
     )
 
     # Schedule to reduce lr to 0.1 times the initial rate in final epoch
-    scheduler = LambdaLR(optim, lambda x: 0.1 ** min(x / args.epochs, 1))
+    lr_sched = LambdaLR(optim, lambda x: 0.1 ** min(x / args.epochs, 1))
 
-    x = torch.linspace(-1, 1, W)
-    y = torch.linspace(-1, 1, H)
+    X, Y = torch.meshgrid(
+        torch.linspace(-1, 1, W), torch.linspace(-1, 1, H), indexing="xy"
+    )
+    coords = torch.hstack((X.reshape(-1, 1), Y.reshape(-1, 1))).to(device)
 
-    X, Y = torch.meshgrid(x, y, indexing="xy")
-    coords = torch.hstack((X.reshape(-1, 1), Y.reshape(-1, 1)))[None, ...]
+    gt = (
+        torch.tensor(img).reshape(H * W, img_dim).to(device)
+    )  # the model output will be of the shape 3 -> (x, y, z) - so ground truth also have to have shape of 3
 
-    image_tensor = torch.tensor(im)
-    gt = image_tensor.reshape(H * W, imdim)[None, ...].to(device)
-    gt_tensor = torch.tensor(im_noisy)
-    gt_noisy = gt_tensor.reshape(H * W, imdim)[None, ...].to(device)
+    prog_bar = tqdm(range(args.epochs))
 
-    mse_array = torch.zeros(args.epochs, device=device)
-    mse_loss_array = torch.zeros(args.epochs, device=device)
-    time_array = torch.zeros_like(mse_array)
+    best_psnr = -math.inf
+    best_image = None
+    for epoch in prog_bar:
+        indices = torch.randperm(H * W).to(device)
+        reconst_arr = torch.zeros_like(gt).to(device)
 
-    best_mse = torch.tensor(float("inf"))
-    best_img = None
+        # batch training
+        train_loss = cnt = 0
+        for start_idx in range(0, H * W, args.batch_size):
+            end_idx = min(H * W, start_idx + args.batch_size)
 
-    rec = torch.zeros_like(gt).to(device)
+            batch_indices = indices[start_idx:end_idx].to(device)
+            batch_coords = coords[batch_indices, ...].unsqueeze(0)
 
-    tbar = tqdm(range(args.epochs))
-    init_time = time.time()
+            pixel_vals_preds = model(batch_coords)
 
-    b_coords = coords.to(device)
+            loss = ((pixel_vals_preds - gt[batch_indices, :]) ** 2).mean()
+            train_loss += loss.item()
 
-    for epoch in tbar:
-        indices = torch.randperm(H * W)
-
-        main_loss = cnt = 0
-        for b_idx in range(0, H * W, maxpoints):
-            b_indices = indices[b_idx : min(H * W, b_idx + maxpoints)]
-            b_coords = coords[:, b_indices, ...].to(device)
-            b_indices = b_indices.to(device)
-            pixelvalues = model(b_coords)
-
-            with torch.no_grad():
-                rec[:, b_indices, :] = pixelvalues
-
-            loss = ((pixelvalues - gt_noisy[:, b_indices, :]) ** 2).mean()
-            main_loss += loss.item()
-
-            optim.zero_grad()
+            model.zero_grad()
             loss.backward()
             optim.step()
 
+            with torch.no_grad():
+                reconst_arr[batch_indices, :] = pixel_vals_preds.squeeze(0)
+
             cnt += 1
 
-        time_array[epoch] = time.time() - init_time
-
+        # evaluation
         with torch.no_grad():
-            mse_loss_array[epoch] = ((gt_noisy - rec) ** 2).mean().item()
-            mse_array[epoch] = ((gt - rec) ** 2).mean().item()
-            im_gt = gt.reshape(H, W, imdim).permute(2, 0, 1)[None, ...]
-            im_rec = rec.reshape(H, W, imdim).permute(2, 0, 1)[None, ...]
+            reconst_arr = reconst_arr.detach().cpu().numpy()
+            psnr_val = utils.psnr(gt.detach().cpu().numpy(), reconst_arr)
 
-            psnrval = -10 * torch.log10(mse_array[epoch])
-            tbar.set_description("%.1f" % psnrval)
-            tbar.refresh()
+            prog_bar.set_description(f"PSNR: {psnr_val:.1f} dB")
+            prog_bar.refresh()
 
-            if os.getenv("WANDB_LOG") in ["true", "True", True]:
-                xp.log({"loss": main_loss / cnt, "psnr": psnrval})
+            if psnr_val > best_psnr:
+                best_psnr = psnr_val
+                best_image = reconst_arr.reshape(W, H, img_dim)
 
-        scheduler.step()
+            if wandb_xp:
+                wandb_xp.log({"loss": train_loss / cnt, "psnr": psnr_val})
 
-        imrec = rec[0, ...].reshape(H, W, imdim).detach().cpu().numpy()
+        lr_sched.step()
 
-        # cv2.imshow("Reconstruction", imrec[..., ::-1])
-        # cv2.waitKey(1)
+        if args.live:
+            cv2.imshow("Reconstruction", reconst_arr.reshape(W, H, img_dim))
+            cv2.waitKey(1)
 
-        if (mse_array[epoch] < best_mse) or (epoch == 0):
-            best_psnr = psnrval
-            best_mse = mse_array[epoch]
-            best_img = imrec
+    print(f"Best PSNR: {best_psnr:.2f} dB")
 
-    mdict = {
-        "rec": best_img,
-        "gt": im,
-        "im_noisy": im_noisy,
-        "mse_noisy_array": mse_loss_array.detach().cpu().numpy(),
-        "mse_array": mse_array.detach().cpu().numpy(),
-        "time_array": time_array.detach().cpu().numpy(),
-    }
+    return model, best_image
 
-    os.makedirs(
-        os.path.join(os.getenv("RESULTS_SAVE_PATH"), "denoising"),
-        exist_ok=True,
-    )
-    io.savemat(
-        os.path.join(
-            os.getenv("RESULTS_SAVE_PATH"),
-            "denoising",
-            f"{nonlin}_{args.input_image}.mat",
-        ),
-        mdict,
-    )
-    # cv2.imwrite(f"results/denoising/{nonlin}.jpg", best_img[..., ::-1])
 
-    print("Best PSNR: %.2f dB" % utils.psnr(im, best_img))  # %%
-
-    # save model
-    os.makedirs(
-        os.path.join(os.getenv("MODEL_SAVE_PATH"), "denoising"),
-        exist_ok=True,
-    )
-    torch.save(
-        model.state_dict(),
-        os.path.join(
-            os.getenv("MODEL_SAVE_PATH"),
-            "denoising",
-            f"{nonlin}_{args.input_image}.pth",
-        ),
-    )
-
-    # fig, axes = plt.subplots(1, 2, figsize=(18, 6))
-    # axes[0].imshow(input_image)
-    # axes[1].imshow(best_img)
-    # axes[0].title.set_text("Original")
-    # axes[1].title.set_text(f"{nonlin}")
-    # plt.savefig(f"results/Original-vs-{nonlin}.png")  # Save as PNG image
-
-    plt.imshow(best_img)
-    plt.savefig(
-        os.path.join(
-            os.getenv("RESULTS_SAVE_PATH"),
-            "denoising",
-            f"{nonlin}_{args.input_image}.png",
-        )
-    )
-
+def main():
     if os.getenv("WANDB_LOG") in ["true", "True", True]:
-        print("saving the image on WANDB")
-        wandb.log(
-            {
-                f"{nonlin}_{args.input_image}_image_reconst": [
-                    wandb.Image(best_img, caption="Reconstructed image.")
-                ]
-            }
+        run_name = f'image_reconst | {args.non_linearity} | {args.input_image} | {str(time.time()).replace(".", "_")}'
+        wandb_xp = wandb.init(
+            name=run_name, project="pracnet", resume="allow", anonymous="allow"
         )
+
+    args = get_args()
+    model, best_image = train(args, wandb_xp)
+    save_results(
+        f"{args.non_linearity}_{args.input_image}",
+        best_image,
+        model,
+        os.path.join(os.getenv("RESULTS_SAVE_PATH"), "reconst"),
+        os.path.join(os.getenv("MODEL_SAVE_PATH"), "reconst"),
+    )
 
 
 if __name__ == "__main__":

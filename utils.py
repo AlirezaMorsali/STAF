@@ -8,13 +8,13 @@ Miscellaneous utilities that are helpful but cannot be clubbed into other module
 import numpy as np
 
 
-def normalize(x, fullnormalize=False):
+def normalize(x, full_normalize=False):
     """
     Normalize input to lie between 0, 1.
 
     Inputs:
         x: Input signal
-        fullnormalize: If True, normalize such that minimum is 0 and
+        full_normalize: If True, normalize such that minimum is 0 and
             maximum is 1. Else, normalize such that maximum is 1 alone.
 
     Outputs:
@@ -26,7 +26,7 @@ def normalize(x, fullnormalize=False):
 
     xmax = x.max()
 
-    if fullnormalize:
+    if full_normalize:
         xmin = x.min()
     else:
         xmin = 0
