@@ -28,7 +28,7 @@ print(f"using {device}")
 def get_args():
     """
     Get training arguemtns.
-    
+
     Outputs:
         args: arguemnts object.
     """
@@ -328,8 +328,8 @@ def main():
         f"{args.non_linearity}_{args.input_image}",
         reconstructed_image,
         model,
-        os.path.join(os.getenv("RESULTS_SAVE_PATH"), "reconst"),
-        os.path.join(os.getenv("MODEL_SAVE_PATH"), "reconst"),
+        os.path.join(os.getenv("RESULTS_SAVE_PATH", "."), "reconst"),
+        os.path.join(os.getenv("MODEL_SAVE_PATH", "."), "reconst"),
     )
 
 
