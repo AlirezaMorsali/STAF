@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import math
 import os
 import skimage
 from tqdm import tqdm
@@ -8,19 +7,17 @@ import time
 import cv2
 import argparse
 import wandb
-
 import numpy as np
 import matplotlib.pyplot as plt
+from dotenv import load_dotenv
 
 import torch
 import torch.nn
 from torch.optim.lr_scheduler import LambdaLR
 
-
 from models import ParacNet
 import utils
 
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -29,6 +26,12 @@ print(f"using {device}")
 
 
 def get_args():
+    """
+    Get training arguemtns.
+    
+    Outputs:
+        args: arguemnts object.
+    """
     parser = argparse.ArgumentParser(description="Image reconstruction parameters")
     parser.add_argument(
         "-i",
@@ -73,6 +76,11 @@ def get_args():
 
 
 def save_results(train_name, best_image, model, results_saving_path, model_saving_path):
+    """
+    Save the results. Including saving the reconstructed image and the trained model.
+    """
+
+    print("Saving the reconstructed image and the trained model.")
     # save model
     os.makedirs(
         model_saving_path,
@@ -149,7 +157,9 @@ def get_model(
         fn_samples (None): Redundant parameter
         use_nyquist (True): if True, use nyquist sampling for
             positional encoding
-    Output: Model instance
+
+    Outputs:
+        Model instance
     """
 
     if non_linearity == "parac":
@@ -194,6 +204,18 @@ def load_image_data(image_name):
 
 
 def train(args, wandb_xp=None):
+    """
+    Train the model.
+
+    Inputs:
+        args: training arguments.
+        wandb_xp: WANDB expriment instance.
+
+    Outputs:
+        model: trained model
+        reconstructed image: The last reconstructed image.
+    """
+
     # ? what to do w/ these?
     # Gabor filter constants.
     # We suggest omega0 = 4 and sigma0 = 4 for reconst, and omega0=20, sigma0=30 for image representation
@@ -202,7 +224,7 @@ def train(args, wandb_xp=None):
 
     img = load_image_data(args.input_image)
     img = utils.normalize(img.astype(np.float32), full_normalize=True)
-    img = cv2.resize(img, None, fx=1 / 2, fy=1 / 2, interpolation=cv2.INTER_AREA)
+    img = cv2.resize(img, None, fx=1 / 16, fy=1 / 16, interpolation=cv2.INTER_AREA)
 
     H, W = img.shape[0], img.shape[1]
     if len(img.shape) == 2:
@@ -243,8 +265,6 @@ def train(args, wandb_xp=None):
 
     prog_bar = tqdm(range(args.epochs))
 
-    best_psnr = -math.inf
-    best_image = None
     for epoch in prog_bar:
         indices = torch.randperm(H * W).to(device)
         reconst_arr = torch.zeros_like(gt).to(device)
@@ -279,12 +299,8 @@ def train(args, wandb_xp=None):
             prog_bar.set_description(f"PSNR: {psnr_val:.1f} dB")
             prog_bar.refresh()
 
-            if psnr_val > best_psnr:
-                best_psnr = psnr_val
-                best_image = reconst_arr.reshape(W, H, img_dim)
-
             if wandb_xp:
-                wandb_xp.log({"loss": train_loss / cnt, "psnr": psnr_val})
+                wandb_xp.log({"train loss": train_loss / cnt, "psnr": psnr_val})
 
         lr_sched.step()
 
@@ -292,12 +308,14 @@ def train(args, wandb_xp=None):
             cv2.imshow("Reconstruction", reconst_arr.reshape(W, H, img_dim))
             cv2.waitKey(1)
 
-    print(f"Best PSNR: {best_psnr:.2f} dB")
-
-    return model, best_image
+    return model, reconst_arr.reshape(W, H, img_dim)
 
 
 def main():
+    """
+    Main function for training the model on Image Reconstruction task.
+    """
+    wandb_xp = None
     if os.getenv("WANDB_LOG") in ["true", "True", True]:
         run_name = f'image_reconst | {args.non_linearity} | {args.input_image} | {str(time.time()).replace(".", "_")}'
         wandb_xp = wandb.init(
@@ -305,10 +323,10 @@ def main():
         )
 
     args = get_args()
-    model, best_image = train(args, wandb_xp)
+    model, reconstructed_image = train(args, wandb_xp)
     save_results(
         f"{args.non_linearity}_{args.input_image}",
-        best_image,
+        reconstructed_image,
         model,
         os.path.join(os.getenv("RESULTS_SAVE_PATH"), "reconst"),
         os.path.join(os.getenv("MODEL_SAVE_PATH"), "reconst"),
