@@ -123,7 +123,6 @@ def get_model(
     hidden_features,
     hidden_layers,
     out_features,
-    outermost_linear=True,
     first_omega_0=30,
     hidden_omega_0=30,
     scale=10,
@@ -143,8 +142,6 @@ def get_model(
         hidden_layers: Number of hidden layers
         out_features; Number of outputs features. 3 for color
             image, 1 for grayscale or volume and so on
-        outermost_linear (True): If True, do not apply non_linearity
-            just before output
         first_omega0 (30): For siren and wire only: Omega
             for first layer
         hidden_omega0 (30): For siren and wire only: Omega
@@ -168,7 +165,6 @@ def get_model(
             hidden_features=hidden_features,
             hidden_layers=hidden_layers,
             out_features=out_features,
-            outermost_linear=outermost_linear,
             first_omega_0=first_omega_0,
             hidden_omega_0=hidden_omega_0,
             scale=scale,

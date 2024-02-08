@@ -100,7 +100,6 @@ class ParacNet(INR):
         hidden_features,
         hidden_layers,
         out_features,
-        outermost_linear=True,
         first_omega_0=30,
         hidden_omega_0=30,
         scale=10,
@@ -110,13 +109,15 @@ class ParacNet(INR):
         use_nyquist=True,
     ):
         non_linearity = Parasin
+        
+        # final layer of this model, will be a simple linear
+        final_layer = None
         super().__init__(
             non_linearity,
             in_features,
             hidden_features,
             hidden_layers,
             out_features,
-            outermost_linear,
             first_omega_0,
             hidden_omega_0,
             scale,
@@ -124,4 +125,5 @@ class ParacNet(INR):
             sidelength,
             fn_samples,
             use_nyquist,
+            final_layer=final_layer,
         )
