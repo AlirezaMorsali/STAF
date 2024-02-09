@@ -42,7 +42,7 @@ class Parasin(nn.Module):
 
         self.bs = nn.Parameter(torch.ones(self.nf), requires_grad=True)
         self.phis = nn.Parameter(torch.zeros(self.nf), requires_grad=True)
-        self.siren_init_weights()
+        self.init_weights()
 
     def init_weights(self):
         with torch.no_grad():
