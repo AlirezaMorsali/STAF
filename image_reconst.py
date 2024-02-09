@@ -15,8 +15,7 @@ import torch
 import torch.nn
 from torch.optim.lr_scheduler import LambdaLR
 
-from models import ParacNet
-from models import Wire
+from models import ParacNet, Wire, Siren
 import utils
 
 
@@ -44,7 +43,7 @@ def get_args():
     parser.add_argument(
         "-n",
         "--non_linearity",
-        choices=["parac", "wire"],
+        choices=["parac", "wire", "siren"],
         type=str,
         help="Name of non linearity",
         default="parac",
@@ -56,7 +55,7 @@ def get_args():
         "--lr",
         type=float,
         default=1e-4,
-        help="Learning rate. Parac works best at 1e-4, Wire at 5e-3 to 2e-2.",
+        help="Learning rate. Parac works best at 1e-4, Wire at 5e-3 to 2e-2, SIREN at 1e-3 to 2e-3.",
     )
     parser.add_argument(
         "-b",
@@ -136,7 +135,7 @@ def get_model(
     implicit neural representation
 
     Inputs:
-        non_linearity: One of 'parac', 'wire'.
+        non_linearity: One of 'parac', 'wire', 'siren'.
         in_features: Number of input features. 2 for image, 3 for volume and so on.
         hidden_features: Number of features per hidden layer
         hidden_layers: Number of hidden layers
@@ -170,6 +169,20 @@ def get_model(
 
     elif non_linearity == "wire":
         model = Wire(
+            in_features=2,
+            hidden_features=hidden_features,
+            hidden_layers=hidden_layers,
+            out_features=out_features,
+            first_omega_0=first_omega_0,
+            hidden_omega_0=hidden_omega_0,
+            scale=scale,
+            pos_encode=False,
+            sidelength=sidelength,
+            fn_samples=fn_samples,
+            use_nyquist=use_nyquist,
+        )
+    elif non_linearity == "siren":
+        model = Siren(
             in_features=2,
             hidden_features=hidden_features,
             hidden_layers=hidden_layers,
@@ -229,7 +242,7 @@ def train(args, wandb_xp=None):
 
     img = load_image_data(args.input_image)
     img = utils.normalize(img.astype(np.float32), full_normalize=True)
-    img = cv2.resize(img, None, fx=1 / 2, fy=1 / 2, interpolation=cv2.INTER_AREA)
+    img = cv2.resize(img, None, fx=1 / 8, fy=1 / 8, interpolation=cv2.INTER_AREA)
 
     H, W = img.shape[0], img.shape[1]
     if len(img.shape) == 2:
@@ -295,6 +308,22 @@ def train(args, wandb_xp=None):
                 reconst_arr[batch_indices, :] = pixel_vals_preds.squeeze(0)
 
             cnt += 1
+
+
+        # # no batch training -> only for comparison
+        # pixel_vals_preds = model(coords.unsqueeze(0))
+        # loss = ((pixel_vals_preds - gt) ** 2).mean()
+        # train_loss += loss.item()
+
+        # model.zero_grad()
+        # loss.backward()
+        # optim.step()
+
+        # with torch.no_grad():
+        #     reconst_arr = pixel_vals_preds.squeeze(0)
+
+        # cnt += 1
+        # # no batch training -> only for comparison
 
         # evaluation
         with torch.no_grad():
