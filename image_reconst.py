@@ -16,6 +16,7 @@ import torch.nn
 from torch.optim.lr_scheduler import LambdaLR
 
 from models import ParacNet
+from models import Wire
 import utils
 
 
@@ -43,7 +44,7 @@ def get_args():
     parser.add_argument(
         "-n",
         "--non_linearity",
-        choices=["parac"],
+        choices=["parac", "wire"],
         type=str,
         help="Name of non linearity",
         default="parac",
@@ -53,9 +54,9 @@ def get_args():
     )
     parser.add_argument(
         "--lr",
-        type=int,
+        type=float,
         default=1e-4,
-        help="Learning rate. Parac works best at 1e-4",
+        help="Learning rate. Parac works best at 1e-4, Wire at 5e-3 to 2e-2.",
     )
     parser.add_argument(
         "-b",
@@ -135,25 +136,18 @@ def get_model(
     implicit neural representation
 
     Inputs:
-        non_linearity: One of 'parac'
-        in_features: Number of input features. 2 for image,
-            3 for volume and so on.
+        non_linearity: One of 'parac', 'wire'.
+        in_features: Number of input features. 2 for image, 3 for volume and so on.
         hidden_features: Number of features per hidden layer
         hidden_layers: Number of hidden layers
-        out_features; Number of outputs features. 3 for color
-            image, 1 for grayscale or volume and so on
-        first_omega0 (30): For siren and wire only: Omega
-            for first layer
-        hidden_omega0 (30): For siren and wire only: Omega
-            for hidden layers
-        scale (10): For wire and gauss only: Scale for
-            Gaussian window
+        out_features; Number of outputs features. 3 for color image, 1 for grayscale or volume and so on
+        first_omega0 (30): For siren and wire only: Omega for first layer
+        hidden_omega0 (30): For siren and wire only: Omega for hidden layers
+        scale (10): For wire and gauss only: Scale for Gaussian window
         pos_encode (False): If True apply positional encoding
-        sidelength (512): if pos_encode is true, use this
-            for side length parameter
+        sidelength (512): if pos_encode is true, use this for side length parameter
         fn_samples (None): Redundant parameter
-        use_nyquist (True): if True, use nyquist sampling for
-            positional encoding
+        use_nyquist (True): if True, use nyquist sampling for positional encoding
 
     Outputs:
         Model instance
@@ -161,6 +155,21 @@ def get_model(
 
     if non_linearity == "parac":
         model = ParacNet(
+            in_features=2,
+            hidden_features=hidden_features,
+            hidden_layers=hidden_layers,
+            out_features=out_features,
+            first_omega_0=first_omega_0,
+            hidden_omega_0=hidden_omega_0,
+            scale=scale,
+            pos_encode=False,
+            sidelength=sidelength,
+            fn_samples=fn_samples,
+            use_nyquist=use_nyquist,
+        )
+
+    elif non_linearity == "wire":
+        model = Wire(
             in_features=2,
             hidden_features=hidden_features,
             hidden_layers=hidden_layers,
@@ -220,7 +229,7 @@ def train(args, wandb_xp=None):
 
     img = load_image_data(args.input_image)
     img = utils.normalize(img.astype(np.float32), full_normalize=True)
-    img = cv2.resize(img, None, fx=1 / 16, fy=1 / 16, interpolation=cv2.INTER_AREA)
+    img = cv2.resize(img, None, fx=1 / 2, fy=1 / 2, interpolation=cv2.INTER_AREA)
 
     H, W = img.shape[0], img.shape[1]
     if len(img.shape) == 2:

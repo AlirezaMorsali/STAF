@@ -17,33 +17,37 @@ class INR(nn.Module):
         sidelength=512,
         fn_samples=None,
         use_nyquist=True,
+        first_layer=None,
         final_layer=None,
     ):
         super().__init__()
 
+        self.non_linearity = non_linearity
         self.pos_encode = pos_encode
-        self.non_linearity_layer = non_linearity
         self.net = []
 
         # first layer
-        first_layer = self.non_linearity_layer(
-            in_features=in_features,
-            out_features=hidden_features,
-            is_first=True,
-            omega_0=first_omega_0,
-            scale=scale,
-        )
-        self.net.append(first_layer)
+        if first_layer:
+            self.net.append(first_layer)
+        else:
+            first_layer = self.non_linearity(
+                in_features=in_features,
+                out_features=hidden_features,
+                is_first=True,
+                omega_0=first_omega_0,
+            )
+
+            self.net.append(first_layer)
 
         # hidden layers
         self.net.extend(
             [
-                self.non_linearity_layer(
+                self.non_linearity(
                     in_features=hidden_features,
                     out_features=hidden_features,
                     is_first=False,
                     omega_0=hidden_omega_0,
-                    scale=scale,
+                    sigma_0=scale,
                 )
                 for _ in range(hidden_layers)
             ]

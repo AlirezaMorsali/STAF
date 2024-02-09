@@ -27,8 +27,7 @@ class Parasin(nn.Module):
         bias=True,
         is_first=False,
         omega_0=30,
-        scale=10.0,
-        init_weights=True,
+        sigma_0=None, # ! do something about this
     ):
         super().__init__()
 
@@ -109,7 +108,7 @@ class ParacNet(INR):
         use_nyquist=True,
     ):
         non_linearity = Parasin
-        
+
         # final layer of this model, will be a simple linear
         final_layer = None
         super().__init__(
