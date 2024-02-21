@@ -98,7 +98,7 @@ input_image = plt.imread(image_path)
 if args.resize:
     input_image = cv2.resize(input_image, (args.resize, args.resize))
 im = utils.normalize(input_image.astype(np.float32), True)
-# im = cv2.resize(im, None, fx=1 / 4, fy=1 / 4, interpolation=cv2.INTER_AREA)
+im = cv2.resize(im, None, fx=1 / 2, fy=1 / 2, interpolation=cv2.INTER_AREA)
 
 imsh = im.shape
 (
@@ -168,12 +168,11 @@ y = torch.linspace(-1, 1, H)
 X, Y = torch.meshgrid(x, y, indexing="xy")
 coords = torch.hstack((X.reshape(-1, 1), Y.reshape(-1, 1)))[None, ...]
 
-image_tensor = torch.tensor(im)
-image_tensor.to(device)
-gt = image_tensor.reshape(H * W, imdim)[None, ...]
-gt_tensor = torch.tensor(im_noisy)
+image_tensor = torch.tensor(im).to(device)
+gt = image_tensor.reshape(H * W, imdim)[None, ...].to(device)
+gt_tensor = torch.tensor(im_noisy).to(device)
 gt_tensor.to(device)
-gt_noisy = gt_tensor.reshape(H * W, imdim)[None, ...]
+gt_noisy = gt_tensor.reshape(H * W, imdim)[None, ...].to(device)
 
 mse_array = torch.zeros(niters, device=device)
 mse_loss_array = torch.zeros(niters, device=device)
