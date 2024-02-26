@@ -66,6 +66,7 @@ parser.add_argument("--d_coef", type=float, default=0.0269, help="d coeficient")
 args = parser.parse_args(args=[])
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"using {device}")
 
 im = utils.normalize(plt.imread(args.input).astype(np.float32), True)
 k = 1
@@ -253,12 +254,21 @@ def train_epoch(
         best_img = imrec
         best_img = (best_img - best_img.min()) / (best_img.max() - best_img.min())
 
-    return best_img, best_loss, psnr, psnr_values, mse_array
+    return model, optim, scheduler, best_img, best_loss, psnr, psnr_values, mse_array
 
 
 best_img1 = best_img2 = 0
 for step in tqdm(range(args.niters)):
-    best_img1, best_loss1, psnr1, psnr_values1, mse_array1 = train_epoch(
+    (
+        model1,
+        optim1,
+        scheduler1,
+        best_img1,
+        best_loss1,
+        psnr1,
+        psnr_values1,
+        mse_array1,
+    ) = train_epoch(
         args.inr_model1,
         model1,
         optim1,
@@ -268,7 +278,16 @@ for step in tqdm(range(args.niters)):
         psnr_values1,
         mse_array1,
     )
-    best_img2, best_loss2, psnr2, psnr_values2, mse_array2 = train_epoch(
+    (
+        model2,
+        optim2,
+        scheduler2,
+        best_img2,
+        best_loss2,
+        psnr2,
+        psnr_values2,
+        mse_array2,
+    ) = train_epoch(
         args.inr_model2,
         model2,
         optim2,
@@ -287,6 +306,8 @@ for step in tqdm(range(args.niters)):
         print(
             f"{args.inr_model2} - Epoch: {step} | Total Loss: {mse_array2[step].item():.5f} | PSNR: {psnr2.item():.4f}"
         )
+
+        print()
 
 
 # Print maximum PSNR achieved during training
