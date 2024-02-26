@@ -1,18 +1,10 @@
 import argparse
-import os
-import time
 
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
-import skimage
 import torch
-import torch.nn.functional as F
 import torch.optim.lr_scheduler as lr_scheduler
-import torchvision.models as models
-from PIL import Image
-from pytorch_msssim import ssim
-from scipy import io
 from torch import nn
 from tqdm.notebook import tqdm
 
@@ -331,4 +323,20 @@ axes[2].imshow(best_img2, cmap=cmap)
 axes[2].axis("off")
 
 fig.savefig("./data/result.png")
+
+fig_data, ax_data = plt.subplots(figsize=(6, 4))
+ax_data.plot(psnr_values1, label=f"SIREN", color="blue")
+ax_data.plot(psnr_values2, label=f"PARAC", color="red")
+ax_data.set_title("PSNR")
+ax_data.set_xlabel("Epochs")
+ax_data.set_ylabel("PSNR")
+ax_data.grid(True)
+ax_data.legend()
+fig_data.savefig("PSNR.png")
+# Adjust layout
+plt.tight_layout()
+
+# Save the figure with the data plots
+fig_data.savefig("data_plots.png")
+
 plt.show()
