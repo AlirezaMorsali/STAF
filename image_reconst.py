@@ -308,7 +308,6 @@ def train(args, wandb_xp=None):
 
             cnt += 1
 
-
         # # no batch training -> only for comparison
         # pixel_vals_preds = model(coords.unsqueeze(0))
         # loss = ((pixel_vals_preds - gt) ** 2).mean()
@@ -340,6 +339,16 @@ def train(args, wandb_xp=None):
         if args.live:
             cv2.imshow("Reconstruction", reconst_arr.reshape(W, H, img_dim))
             cv2.waitKey(1)
+
+    print("saving the parameters of the model")
+    params = {
+        "ws": torch.stack(list(map(lambda x: x.ws.cpu().detach(), model.net[:-1]))),
+        "phis": torch.stack(list(map(lambda x: x.phis.cpu().detach(), model.net[:-1]))),
+        "bs": torch.stack(list(map(lambda x: x.bs.cpu().detach(), model.net[:-1]))),
+        "final_linear_weights": model.net[-1].weight.cpu().permute((1, 0)).detach().numpy(),
+        "final_linear_biases": model.net[-1].bias.cpu().detach().numpy(),
+    }
+    np.savez(os.getenv("MODEL_PARAMS_SAVING_PATH"), **params)
 
     return model, reconst_arr.reshape(W, H, img_dim)
 
