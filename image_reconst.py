@@ -15,7 +15,7 @@ import torch
 import torch.nn
 from torch.optim.lr_scheduler import LambdaLR
 
-from models import ParacNet, Wire, Siren
+from models import Parac, Wire, Siren
 import utils
 
 
@@ -62,7 +62,7 @@ def get_args():
         "--batch_size",
         type=int,
         default=128 * 128,
-        help="Batch size. Suggestion: (2^n)*(2^n), aka powers of two. For example: 128*128",
+        help="Batch size.",
     )
     parser.add_argument(
         "--live",
@@ -153,7 +153,7 @@ def get_model(
     """
 
     if non_linearity == "parac":
-        model = ParacNet(
+        model = Parac(
             in_features=2,
             hidden_features=hidden_features,
             hidden_layers=hidden_layers,
@@ -234,7 +234,6 @@ def train(args, wandb_xp=None):
         reconstructed image: The last reconstructed image.
     """
 
-    # ? what to do w/ these?
     # Gabor filter constants.
     # We suggest omega0 = 4 and sigma0 = 4 for reconst, and omega0=20, sigma0=30 for image representation
     omega0 = 30.0  # Frequency of sinusoid
@@ -242,13 +241,13 @@ def train(args, wandb_xp=None):
 
     img = load_image_data(args.input_image)
     img = utils.normalize(img.astype(np.float32), full_normalize=True)
-    img = cv2.resize(img, None, fx=1 / 8, fy=1 / 8, interpolation=cv2.INTER_AREA)
+    img = cv2.resize(img, None, fx=1 / 5, fy=1 / 5, interpolation=cv2.INTER_AREA)
 
     H, W = img.shape[0], img.shape[1]
     if len(img.shape) == 2:
         # grayscale image
         img_dim = 1
-        img = img[:, :, np.newaxis]  # ?
+        img = img[:, :, np.newaxis]
     else:
         # rgb image
         img_dim = 3
