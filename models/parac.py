@@ -1,10 +1,9 @@
-#!/usr/bin/env python
-
 import math
 
-import numpy as np
 import torch
 from torch import nn
+
+from models import INR
 
 
 class Parasin(nn.Module):
@@ -28,7 +27,7 @@ class Parasin(nn.Module):
         bias=True,
         is_first=False,
         omega_0=30,
-        scale=10.0,
+        sigma_0=10.0,
         init_weights=True,
     ):
         super().__init__()
@@ -39,11 +38,15 @@ class Parasin(nn.Module):
 
         self.in_features = in_features
         self.linear = nn.Linear(in_features, out_features, bias=bias)
-        # self.ws = nn.Parameter(torch.ones(self.nf), requires_grad=True)
 
-        # ws = omega_0 * torch.rand(self.nf)
-        # ws = omega_0 * torch.ones(self.nf)
-        ws = torch.arange(15, 15 + self.nf).float()
+        # Initialize weights and parameters
+        self.init_params()
+                
+    def init_params(self):
+        """
+        Initializes the parameters for the sinusoidal activations.
+        """
+        ws = self.omega_0 * torch.rand(self.nf)
         self.ws = nn.Parameter(ws, requires_grad=True)
 
         # Initialize phases uniformly in the range [-π, π]
@@ -54,18 +57,13 @@ class Parasin(nn.Module):
         # Initialize scale factors based on a Laplace distribution
         diversity_y = 1 / (2 * self.nf)
         laplace_samples = torch.distributions.Laplace(0, diversity_y).sample((self.nf,))
-        self.bs = nn.Parameter(
-            torch.sign(laplace_samples) * torch.sqrt(torch.abs(laplace_samples)),
-            requires_grad=True,
-        )
+        self.bs = nn.Parameter(torch.sign(laplace_samples) * torch.sqrt(torch.abs(laplace_samples)), requires_grad=True)
 
     def forward(self, input):
         return self.param_act(self.linear(input))
 
     def param_act(self, linout):
-        sinusoidal_modulation = self.bs * torch.sin(
-            self.ws * linout.unsqueeze(-1) + self.phis
-        )
+        sinusoidal_modulation = self.bs * torch.sin(self.ws * linout.unsqueeze(-1) + self.phis)
         return sinusoidal_modulation.sum(dim=-1)
 
     def apply_activation(self, x):
@@ -75,67 +73,37 @@ class Parasin(nn.Module):
         return y
 
 
-class INR(nn.Module):
+class Parac(INR):
     def __init__(
         self,
         in_features,
         hidden_features,
         hidden_layers,
         out_features,
-        outermost_linear=True,
         first_omega_0=30,
-        hidden_omega_0=30.0,
-        scale=10.0,
+        hidden_omega_0=30,
+        scale=10,
         pos_encode=False,
         sidelength=512,
         fn_samples=None,
         use_nyquist=True,
     ):
-        super().__init__()
-        self.pos_encode = pos_encode
-        self.nonlin = Parasin
+        non_linearity = Parasin
 
-        self.net = []
-        self.net.append(
-            self.nonlin(
-                in_features,
-                hidden_features,
-                is_first=True,
-                omega_0=first_omega_0,
-                scale=scale,
-            )
+        # final layer of this model, will be a simple linear
+        final_layer = None
+        super().__init__(
+            non_linearity,
+            in_features,
+            hidden_features,
+            hidden_layers,
+            out_features,
+            first_omega_0,
+            hidden_omega_0,
+            scale,
+            pos_encode,
+            sidelength,
+            fn_samples,
+            use_nyquist,
+            final_layer=final_layer,
         )
-
-        for i in range(hidden_layers):
-            self.net.append(
-                self.nonlin(
-                    hidden_features,
-                    hidden_features,
-                    is_first=False,
-                    omega_0=hidden_omega_0,
-                    scale=scale,
-                )
-            )
-
-        if outermost_linear:
-            dtype = torch.float
-            final_linear = nn.Linear(hidden_features, out_features, dtype=dtype)
-
-            self.net.append(final_linear)
-        else:
-            self.net.append(
-                self.nonlin(
-                    hidden_features,
-                    out_features,
-                    is_first=False,
-                    omega_0=hidden_omega_0,
-                    scale=scale,
-                )
-            )
-
-        self.net = nn.Sequential(*self.net)
-
-    def forward(self, coords):
-        output = self.net(coords)
-
-        return output
