@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
-'''
+"""
     Miscellaneous utilities that are extremely helpful but cannot be clubbed
     into other modules.
-'''
+"""
 
 # Scientific computing
 import numpy as np
@@ -14,13 +14,17 @@ from scipy import io
 from scipy.sparse.linalg import svds
 from scipy import signal
 import scipy.io.wavfile as wavfile
+from torch import nn
 
 import torch
 
 # Plotting
+from modules.models import INR
 import cv2
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class AudioFile(torch.utils.data.Dataset):
@@ -38,7 +42,7 @@ class AudioFile(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         amplitude = self.data
         scale = np.max(np.abs(amplitude))
-        amplitude = (amplitude / scale)
+        amplitude = amplitude / scale
         amplitude = torch.Tensor(amplitude).view(-1, 1)
         return self.rate, self.timepoints, amplitude
 
@@ -48,10 +52,8 @@ class AudioFile(torch.utils.data.Dataset):
 def build_train_data(img_ground_truth, sampled_pc):
     H, W, C = img_ground_truth.shape
 
-    img_mask_x = torch.from_numpy(
-        np.random.randint(0, H, sampled_pc))
-    img_mask_y = torch.from_numpy(
-        np.random.randint(0, W, sampled_pc))
+    img_mask_x = torch.from_numpy(np.random.randint(0, H, sampled_pc))
+    img_mask_y = torch.from_numpy(np.random.randint(0, W, sampled_pc))
 
     img_train = img_ground_truth[img_mask_x, img_mask_y]
 
@@ -62,6 +64,7 @@ def build_train_data(img_ground_truth, sampled_pc):
 
     return img_mask, img_train
 
+
 # This is for inpainting
 # From https://github.com/dalmia/siren
 def build_eval_data(img_ground_truth):
@@ -70,7 +73,7 @@ def build_eval_data(img_ground_truth):
     img_mask_x = np.arange(0, H)
     img_mask_y = np.arange(0, W)
 
-    img_mask_x, img_mask_y = np.meshgrid(img_mask_x, img_mask_y, indexing='ij')
+    img_mask_x, img_mask_y = np.meshgrid(img_mask_x, img_mask_y, indexing="ij")
     img_mask_x = torch.from_numpy(img_mask_x)
     img_mask_y = torch.from_numpy(img_mask_y)
 
@@ -83,23 +86,23 @@ def build_eval_data(img_ground_truth):
 
     return img_mask, img_eval
 
-    
+
 def normalize(x, fullnormalize=False):
-    '''
-        Normalize input to lie between 0, 1.
+    """
+    Normalize input to lie between 0, 1.
 
-        Inputs:
-            x: Input signal
-            fullnormalize: If True, normalize such that minimum is 0 and
-                maximum is 1. Else, normalize such that maximum is 1 alone.
+    Inputs:
+        x: Input signal
+        fullnormalize: If True, normalize such that minimum is 0 and
+            maximum is 1. Else, normalize such that maximum is 1 alone.
 
-        Outputs:
-            xnormalized: Normalized x.
-    '''
+    Outputs:
+        xnormalized: Normalized x.
+    """
 
     if x.sum() == 0:
         return x
-    
+
     xmax = x.max()
 
     if fullnormalize:
@@ -107,70 +110,70 @@ def normalize(x, fullnormalize=False):
     else:
         xmin = 0
 
-    xnormalized = (x - xmin)/(xmax - xmin)
+    xnormalized = (x - xmin) / (xmax - xmin)
 
     return xnormalized
 
 
 def rsnr(x, xhat):
-    '''
-        Compute reconstruction SNR for a given signal and its reconstruction.
+    """
+    Compute reconstruction SNR for a given signal and its reconstruction.
 
-        Inputs:
-            x: Ground truth signal (ndarray)
-            xhat: Approximation of x
+    Inputs:
+        x: Ground truth signal (ndarray)
+        xhat: Approximation of x
 
-        Outputs:
-            rsnr_val: RSNR = 20log10(||x||/||x-xhat||)
-    '''
+    Outputs:
+        rsnr_val: RSNR = 20log10(||x||/||x-xhat||)
+    """
     xn = lin.norm(x.reshape(-1))
-    en = lin.norm((x-xhat).reshape(-1))
-    rsnr_val = 20*np.log10(xn/en)
+    en = lin.norm((x - xhat).reshape(-1))
+    rsnr_val = 20 * np.log10(xn / en)
 
     return rsnr_val
 
 
 def psnr(x, xhat):
-    ''' Compute Peak Signal to Noise Ratio in dB
+    """Compute Peak Signal to Noise Ratio in dB
 
-        Inputs:
-            x: Ground truth signal
-            xhat: Reconstructed signal
+    Inputs:
+        x: Ground truth signal
+        xhat: Reconstructed signal
 
-        Outputs:
-            snrval: PSNR in dB
-    '''
+    Outputs:
+        snrval: PSNR in dB
+    """
     err = x - xhat
     denom = np.mean(pow(err, 2))
 
-    snrval = 10*np.log10(np.max(x)/denom)
+    snrval = 10 * np.log10(np.max(x) / denom)
 
     return snrval
 
 
 def measure(x, noise_snr=40, tau=100):
-    ''' Realistic sensor measurement with readout and photon noise
+    """Realistic sensor measurement with readout and photon noise
 
-        Inputs:
-            noise_snr: Readout noise in electron count
-            tau: Integration time. Poisson noise is created for x*tau.
-                (Default is 100)
+    Inputs:
+        noise_snr: Readout noise in electron count
+        tau: Integration time. Poisson noise is created for x*tau.
+            (Default is 100)
 
-        Outputs:
-            x_meas: x with added noise
-    '''
+    Outputs:
+        x_meas: x with added noise
+    """
     x_meas = np.copy(x)
 
-    noise = np.random.randn(x_meas.size).reshape(x_meas.shape)*noise_snr
+    noise = np.random.randn(x_meas.size).reshape(x_meas.shape) * noise_snr
 
     # First add photon noise, provided it is not infinity
-    if tau != float('Inf'):
-        x_meas = x_meas*tau
+    if tau != float("Inf"):
+        x_meas = x_meas * tau
 
         x_meas[x > 0] = np.random.poisson(x_meas[x > 0])
         x_meas[x <= 0] = -np.random.poisson(-x_meas[x <= 0])
 
-        x_meas = (x_meas + noise)/tau
+        x_meas = (x_meas + noise) / tau
 
     else:
         x_meas = x_meas + noise
@@ -179,173 +182,227 @@ def measure(x, noise_snr=40, tau=100):
 
 
 def build_montage(images):
-    '''
-        Build a montage out of images
-    '''
+    """
+    Build a montage out of images
+    """
     nimg, H, W = images.shape
-    
+
     nrows = int(np.ceil(np.sqrt(nimg)))
-    ncols = int(np.ceil(nimg/nrows))
-    
-    montage_im = np.zeros((H*nrows, W*ncols), dtype=np.float32)
-    
+    ncols = int(np.ceil(nimg / nrows))
+
+    montage_im = np.zeros((H * nrows, W * ncols), dtype=np.float32)
+
     cnt = 0
     for r in range(nrows):
         for c in range(ncols):
-            h1 = r*H
-            h2 = (r+1)*H
-            w1 = c*W
-            w2 = (c+1)*W
+            h1 = r * H
+            h2 = (r + 1) * H
+            w1 = c * W
+            w2 = (c + 1) * W
 
             if cnt == nimg:
                 break
 
             montage_im[h1:h2, w1:w2] = normalize(images[cnt, ...], True)
             cnt += 1
-    
+
     return montage_im
-  
-    
+
+
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
 def get_mgrid(sidelen, dim=2):
-    '''Generates a flattened grid of (x,y,...) coordinates in a range of -1 to 1.
+    """Generates a flattened grid of (x,y,...) coordinates in a range of -1 to 1.
     sidelen: int
-    dim: int'''
+    dim: int"""
     tensors = tuple(dim * [torch.linspace(-1, 1, steps=sidelen)])
-    mgrid = torch.stack(torch.meshgrid(*tensors, indexing='ij'), dim=-1)
+    mgrid = torch.stack(torch.meshgrid(*tensors, indexing="ij"), dim=-1)
     mgrid = mgrid.reshape(-1, dim)
     return mgrid
 
 
 def get_coords(H, W, T=None, dim=2):
-    '''
-        Get 2D/3D coordinates
-    '''
-    
+    """
+    Get 2D/3D coordinates
+    """
+
     if dim == 2:
         X, Y = np.meshgrid(np.linspace(-1, 1, W), np.linspace(-1, 1, H))
         coords = np.hstack((X.reshape(-1, 1), Y.reshape(-1, 1)))
     if dim == 3:
-        X, Y, Z = np.meshgrid(np.linspace(-1, 1, W),
-                              np.linspace(-1, 1, H),
-                              np.linspace(-1, 1, T))
-        coords = np.hstack((X.reshape(-1, 1),
-                            Y.reshape(-1, 1),
-                            Z.reshape(-1, 1)))
-    
+        X, Y, Z = np.meshgrid(
+            np.linspace(-1, 1, W), np.linspace(-1, 1, H), np.linspace(-1, 1, T)
+        )
+        coords = np.hstack((X.reshape(-1, 1), Y.reshape(-1, 1), Z.reshape(-1, 1)))
+
     return torch.tensor(coords.astype(np.float32))
 
 
 def resize(cube, scale):
-    '''
-        Resize a multi-channel image
-        
-        Inputs:
-            cube: (H, W, nchan) image stack
-            scale: Scaling 
-    '''
+    """
+    Resize a multi-channel image
+
+    Inputs:
+        cube: (H, W, nchan) image stack
+        scale: Scaling
+    """
     H, W, nchan = cube.shape
-    
+
     im0_lr = cv2.resize(cube[..., 0], None, fx=scale, fy=scale)
     Hl, Wl = im0_lr.shape
-    
+
     cube_lr = np.zeros((Hl, Wl, nchan), dtype=cube.dtype)
-    
+
     for idx in range(nchan):
-        cube_lr[..., idx] = cv2.resize(cube[..., idx], None,
-                                       fx=scale, fy=scale,
-                                       interpolation=cv2.INTER_AREA)
+        cube_lr[..., idx] = cv2.resize(
+            cube[..., idx], None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA
+        )
     return cube_lr
 
 
-def get_inpainting_mask(imsize, mask_type='random2d', mask_frac=0.5):
-    '''
-        Get a 2D mask for image inpainting
-        
-        Inputs:
-            imsize: Image size
-            mask_type: one of 'random2d', 'random1d'
-            mask_frac: Fraction of non-zeros in the mask
-            
-        Outputs:
-            mask: A 2D mask image
-    '''
+def get_inpainting_mask(imsize, mask_type="random2d", mask_frac=0.5):
+    """
+    Get a 2D mask for image inpainting
+
+    Inputs:
+        imsize: Image size
+        mask_type: one of 'random2d', 'random1d'
+        mask_frac: Fraction of non-zeros in the mask
+
+    Outputs:
+        mask: A 2D mask image
+    """
     H, W = imsize
 
-    if mask_type == 'random2d':
+    if mask_type == "random2d":
         mask = np.random.rand(H, W) < mask_frac
-    elif mask_type == 'random1d':
+    elif mask_type == "random1d":
         mask_row = np.random.rand(1, W) < mask_frac
         mask = np.ones((H, 1)).dot(mask_row)
-    elif mask_type == 'bayer':
+    elif mask_type == "bayer":
         mask = np.zeros((H, W))
         mask[::2, ::2] = 1
-        
+
     return mask.astype(np.float32)
 
 
 @torch.no_grad()
-def get_layer_outputs(model, coords, imsize,
-                      nfilters_vis=16,
-                      get_imag=False):
-    '''
-        get activation images after each layer
-        
-        Inputs:
-            model: INR model
-            coords: 2D coordinates
-            imsize: Size of the image
-            nfilters_vis: Number of filters to visualize
-            get_imag: If True, get imaginary component of the outputs
-            
-        Outputs:
-            atoms_montages: A list of 2d grid of outputs
-    '''
+def get_layer_outputs(model, coords, imsize, nfilters_vis=16, get_imag=False):
+    """
+    get activation images after each layer
+
+    Inputs:
+        model: INR model
+        coords: 2D coordinates
+        imsize: Size of the image
+        nfilters_vis: Number of filters to visualize
+        get_imag: If True, get imaginary component of the outputs
+
+    Outputs:
+        atoms_montages: A list of 2d grid of outputs
+    """
     H, W = imsize
 
     if model.pos_encode:
         coords = model.positional_encoding(coords)
-        
+
     atom_montages = []
-    
-    for idx in range(len(model.net)-1):
+
+    for idx in range(len(model.net) - 1):
         layer_output = model.net[idx](coords)
         layer_images = layer_output.reshape(1, H, W, -1)[0]
-        
-        if nfilters_vis != 'all':
+
+        if nfilters_vis != "all":
             layer_images = layer_images[..., :nfilters_vis]
-        
+
         if get_imag:
             atoms = layer_images.detach().cpu().numpy().imag
         else:
             atoms = layer_images.detach().cpu().numpy().real
-            
+
         atoms_min = atoms.min(0, keepdims=True).min(1, keepdims=True)
         atoms_max = atoms.max(0, keepdims=True).max(1, keepdims=True)
-        
-        signs = (abs(atoms_min) > abs(atoms_max))
-        atoms = (1 - 2*signs)*atoms
-        
+
+        signs = abs(atoms_min) > abs(atoms_max)
+        atoms = (1 - 2 * signs) * atoms
+
         # Arrange them by variance
-        atoms_std = atoms.std((0,1))
+        atoms_std = atoms.std((0, 1))
         std_indices = np.argsort(atoms_std)
-        
+
         atoms = atoms[..., std_indices]
-        
+
         atoms_min = atoms.min(0, keepdims=True).min(1, keepdims=True)
         atoms_max = atoms.max(0, keepdims=True).max(1, keepdims=True)
-        
-        atoms = (atoms - atoms_min)/np.maximum(1e-14, atoms_max - atoms_min)
-        
+
+        atoms = (atoms - atoms_min) / np.maximum(1e-14, atoms_max - atoms_min)
+
         atoms[:, [0, -1], :] = 1
         atoms[[0, -1], :, :] = 1
-        
+
         atoms_montage = build_montage(np.transpose(atoms, [2, 0, 1]))
-        
+
         atom_montages.append(atoms_montage)
         coords = layer_output
-        
+
     return atom_montages
+
+
+def get_optim(inr_model, model, lr, maxpoints, H, W):
+    # Optimizer setup
+    if inr_model == "wire":
+        lr = lr * min(1, maxpoints / (H * W))
+
+    optim = torch.optim.Adam(lr=lr, params=model.parameters())
+
+    return optim
+
+
+def get_model(inr_model, im, D, pos_encode_no):
+    if inr_model == "incode":
+        ### Harmonizer Configurations
+        MLP_configs = {
+            "task": "image",
+            "model": "resnet34",
+            "truncated_layer": 5,
+            "in_channels": 64,
+            "hidden_channels": [64, 32, 4],
+            "mlp_bias": 0.3120,
+            "activation_layer": nn.SiLU,
+            "GT": torch.tensor(im).to(device)[None, ...].permute(0, 3, 1, 2),
+        }
+
+        ### Model Configurations
+        model = (
+            INR(inr_model)
+            .run(
+                in_features=2,
+                out_features=D,
+                hidden_features=256,
+                hidden_layers=3,
+                first_omega_0=30.0,
+                hidden_omega_0=30.0,
+                pos_encode_configs=pos_encode_no,
+                MLP_configs=MLP_configs,
+            )
+            .to(device)
+        )
+
+    else:
+        ### Model Configurations for parac
+        model = (
+            INR(inr_model)
+            .run(
+                in_features=2,
+                out_features=D,
+                hidden_features=256,
+                hidden_layers=3,
+                first_omega_0=30.0,
+                hidden_omega_0=30.0,
+            )
+            .to(device)
+        )
+
+    return model

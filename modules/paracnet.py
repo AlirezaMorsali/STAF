@@ -42,9 +42,9 @@ class Parasin(nn.Module):
         self.linear = nn.Linear(in_features, out_features, bias=bias)
         # self.ws = nn.Parameter(torch.ones(self.nf), requires_grad=True)
 
-        ws = omega_0 * torch.rand(self.nf)
+        # ws = omega_0 * torch.rand(self.nf)
         # ws = omega_0 * torch.ones(self.nf)
-        # ws = torch.arange(15, 15 + self.nf).float()
+        ws = torch.arange(15, 15 + self.nf).float()
         self.ws = nn.Parameter(ws, requires_grad=True)
         self.phis = nn.Parameter(requires_grad=True)
         self.bs = nn.Parameter(requires_grad=True)

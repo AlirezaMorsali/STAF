@@ -21,7 +21,8 @@ parser.add_argument(
 parser.add_argument(
     "--inr_model1",
     type=str,
-    default="siren",
+    # default="siren",
+    default="kan",
     help="[gauss, mfn, relu, siren, wire, wire2d, ffn, incode, parac]",
 )
 parser.add_argument(
@@ -61,7 +62,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"using {device}")
 
 im = utils.normalize(plt.imread(args.input).astype(np.float32), True)
-k = 1
+k = 2
 im = cv2.resize(im, None, fx=1 / k, fy=1 / k, interpolation=cv2.INTER_AREA)
 if len(im.shape) == 2:
     H, W = im.shape
@@ -114,7 +115,18 @@ def get_model(inr_model):
             )
             .to(device)
         )
-
+    elif inr_model == "kan":
+        model = (
+            INR(inr_model)
+            .run(
+                in_features=2,
+                out_features=D,
+                hidden_features=256,
+                hidden_layers=3,
+                degree=20,
+            )
+            .to(device)
+        )
     else:
         ### Model Configurations for parac
         model = (
