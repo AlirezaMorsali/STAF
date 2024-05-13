@@ -123,7 +123,7 @@ def get_model(inr_model):
                 out_features=D,
                 hidden_features=256,
                 hidden_layers=3,
-                degree=20,
+                degree=16,
             )
             .to(device)
         )
@@ -337,8 +337,8 @@ axes[2].axis("off")
 fig.savefig("./results/result.png")
 
 fig_data, ax_data = plt.subplots(figsize=(6, 4))
-ax_data.plot(psnr_values1, label=f"SIREN", color="blue")
-ax_data.plot(psnr_values2, label=f"PARAC", color="red")
+ax_data.plot(psnr_values1, label=f"{args.inr_model1}", color="blue")
+ax_data.plot(psnr_values2, label=f"{args.inr_model2}", color="red")
 ax_data.set_title("PSNR")
 ax_data.set_xlabel("Epochs")
 ax_data.set_ylabel("PSNR")
