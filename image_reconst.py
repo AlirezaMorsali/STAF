@@ -16,6 +16,7 @@ import torch.nn
 from torch.optim.lr_scheduler import LambdaLR
 
 from models import Parac, Wire, Siren
+from modules import models
 import utils
 
 
@@ -43,7 +44,7 @@ def get_args():
     parser.add_argument(
         "-n",
         "--non_linearity",
-        choices=["parac", "wire", "siren"],
+        choices=["parac", "wire", "siren", "kan"],
         type=str,
         help="Name of non linearity",
         default="parac",
@@ -203,6 +204,16 @@ def get_model(
             fn_samples=fn_samples,
             use_nyquist=use_nyquist,
         )
+
+    elif non_linearity == 'kan':
+        model = models.INR(non_linearity).run(
+            in_features=2,
+            out_features=out_features,
+            hidden_features=hidden_features,
+            hidden_layers=hidden_layers,
+            degree=16,
+        )
+
 
     return model
 

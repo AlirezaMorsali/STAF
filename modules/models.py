@@ -1,4 +1,5 @@
 
+from . import kan
 from . import gauss
 from . import mfn
 from . import relu
@@ -17,7 +18,8 @@ model_dict = {'gauss': gauss,
               'wire2d': wire2d,
               'ffn': None,
               'incode': incode,
-              'parac': paracnet}
+              'parac': paracnet,
+              'kan': kan}
 
 
 class INR():
