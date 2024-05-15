@@ -107,6 +107,14 @@ def save_results(train_name, best_image, model, results_saving_path, model_savin
         )
     )
 
+    np.save(
+        os.path.join(
+            results_saving_path,
+            f"{train_name}.npy",
+        ),
+        best_image,
+    )
+
     if os.getenv("WANDB_LOG") in ["true", "True", True]:
         print("saving the image on WANDB")
         wandb.log(
@@ -234,14 +242,19 @@ def train(args, wandb_xp=None):
         reconstructed image: The last reconstructed image.
     """
 
-    # Gabor filter constants.
-    # We suggest omega0 = 4 and sigma0 = 4 for reconst, and omega0=20, sigma0=30 for image representation
-    omega0 = 30.0  # Frequency of sinusoid
-    sigma0 = 4.0  # Sigma of Gaussian
+    if args.non_linearity == "wire":
+        # Gabor filter constants.
+        # We suggest omega0 = 4 and sigma0 = 4 for reconst, and omega0=20, sigma0=30 for image representation
+        omega0 = 5.0  # Frequency of sinusoid
+        sigma0 = 5.0  # Sigma of Gaussian
+
+    else:
+        omega0 = 30.0  # Frequency of sinusoid
+        sigma0 = 4.0  # Sigma of Gaussian
 
     img = load_image_data(args.input_image)
+    img = cv2.resize(img, None, fx=1 / 4, fy=1 / 4, interpolation=cv2.INTER_AREA)
     img = utils.normalize(img.astype(np.float32), full_normalize=True)
-    img = cv2.resize(img, None, fx=1 / 5, fy=1 / 5, interpolation=cv2.INTER_AREA)
 
     H, W = img.shape[0], img.shape[1]
     if len(img.shape) == 2:
@@ -281,6 +294,7 @@ def train(args, wandb_xp=None):
     )  # the model output will be of the shape 3 -> (x, y, z) - so ground truth also have to have shape of 3
 
     prog_bar = tqdm(range(args.epochs))
+    psnr_vals = []
 
     for epoch in prog_bar:
         indices = torch.randperm(H * W).to(device)
@@ -308,7 +322,6 @@ def train(args, wandb_xp=None):
 
             cnt += 1
 
-
         # # no batch training -> only for comparison
         # pixel_vals_preds = model(coords.unsqueeze(0))
         # loss = ((pixel_vals_preds - gt) ** 2).mean()
@@ -328,6 +341,7 @@ def train(args, wandb_xp=None):
         with torch.no_grad():
             reconst_arr = reconst_arr.detach().cpu().numpy()
             psnr_val = utils.psnr(gt.detach().cpu().numpy(), reconst_arr)
+            psnr_vals.append(psnr_val)
 
             prog_bar.set_description(f"PSNR: {psnr_val:.1f} dB")
             prog_bar.refresh()
@@ -340,6 +354,14 @@ def train(args, wandb_xp=None):
         if args.live:
             cv2.imshow("Reconstruction", reconst_arr.reshape(W, H, img_dim))
             cv2.waitKey(1)
+
+    np.save(
+        os.path.join(
+            os.path.join(os.getenv("RESULTS_SAVE_PATH", "."), "reconst"),
+            f"{args.non_linearity}_psnr_vals.npy",
+        ),
+        psnr_vals,
+    )
 
     return model, reconst_arr.reshape(W, H, img_dim)
 
