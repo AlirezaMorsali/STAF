@@ -8,6 +8,7 @@ import torch.optim.lr_scheduler as lr_scheduler
 from torch import nn
 from tqdm.notebook import tqdm
 
+import utils
 from modules import utils
 from modules.models import INR
 
@@ -178,15 +179,27 @@ gt = torch.tensor(im).reshape(H * W, D)[None, ...].to(device)
 rec = torch.zeros_like(gt)
 
 
+# indices = torch.randperm(H * W)
+indices = torch.arange(H * W)
+
+
 def train_epoch(
-    inr_model, model, optim, scheduler, best_img, best_loss, psnr_values, mse_array
+    inr_model,
+    model,
+    optim,
+    scheduler,
+    best_img,
+    best_loss,
+    psnr_values,
+    mse_array,
+    train_index,
 ):
     # Randomize the order of data points for each iteration
-    indices = torch.randperm(H * W)
 
     # Process data points in batches
     for b_idx in range(0, H * W, args.maxpoints):
-        b_indices = indices[b_idx : min(H * W, b_idx + args.maxpoints)]
+        b_indices = train_index
+        # b_indices = indices[b_idx : min(H * W, b_idx + args.maxpoints)]
         b_coords = coords[:, b_indices, ...].to(device)
         b_indices = b_indices.to(device)
 
@@ -197,9 +210,6 @@ def train_epoch(
             model_output = model(b_coords)
 
         # Update the reconstructed data
-        with torch.no_grad():
-            rec[:, b_indices, :] = model_output
-
         # Calculate the output loss
         output_loss = ((model_output - gt[:, b_indices, :]) ** 2).mean()
 
@@ -226,6 +236,11 @@ def train_epoch(
 
     # Calculate PSNR
     with torch.no_grad():
+        rec_coords = coords[:, indices, ...].to(device)
+        rec_indices = indices.to(device)
+        model_output = model(rec_coords)
+        rec[:, rec_indices, :] = model_output
+
         mse_array[step] = ((gt - rec) ** 2).mean().item()
         psnr = -10 * torch.log10(mse_array[step])
         psnr_values.append(psnr.item())
@@ -251,6 +266,12 @@ def train_epoch(
 
 best_img1 = best_img2 = 0
 for step in tqdm(range(args.niters)):
+    train_index = indices[::2]
+    # if (step // 10) % 2:
+    # train_index = indices[::2]
+    # else:
+    # train_index = indices[1::2]
+
     (
         model1,
         optim1,
@@ -269,6 +290,7 @@ for step in tqdm(range(args.niters)):
         best_loss1,
         psnr_values1,
         mse_array1,
+        train_index,
     )
     (
         model2,
@@ -288,6 +310,7 @@ for step in tqdm(range(args.niters)):
         best_loss2,
         psnr_values2,
         mse_array2,
+        train_index,
     )
 
     # Display intermediate results at specified intervals

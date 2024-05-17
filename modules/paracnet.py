@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 
+import math
+
 import numpy as np
 import torch
 from torch import nn
-import math
+
 
 class Parasin(nn.Module):
     """
@@ -37,15 +39,11 @@ class Parasin(nn.Module):
 
         self.in_features = in_features
         self.linear = nn.Linear(in_features, out_features, bias=bias)
+        # self.ws = nn.Parameter(torch.ones(self.nf), requires_grad=True)
 
-        # Initialize weights and parameters
-        self.init_params()
-                
-    def init_params(self):
-        """
-        Initializes the parameters for the sinusoidal activations.
-        """
-        ws = self.omega_0 * torch.rand(self.nf)
+        # ws = omega_0 * torch.rand(self.nf)
+        # ws = omega_0 * torch.ones(self.nf)
+        ws = torch.arange(15, 15 + self.nf).float()
         self.ws = nn.Parameter(ws, requires_grad=True)
 
         # Initialize phases uniformly in the range [-π, π]
@@ -56,13 +54,18 @@ class Parasin(nn.Module):
         # Initialize scale factors based on a Laplace distribution
         diversity_y = 1 / (2 * self.nf)
         laplace_samples = torch.distributions.Laplace(0, diversity_y).sample((self.nf,))
-        self.bs = nn.Parameter(torch.sign(laplace_samples) * torch.sqrt(torch.abs(laplace_samples)), requires_grad=True)
+        self.bs = nn.Parameter(
+            torch.sign(laplace_samples) * torch.sqrt(torch.abs(laplace_samples)),
+            requires_grad=True,
+        )
 
     def forward(self, input):
         return self.param_act(self.linear(input))
 
     def param_act(self, linout):
-        sinusoidal_modulation = self.bs * torch.sin(self.ws * linout.unsqueeze(-1) + self.phis)
+        sinusoidal_modulation = self.bs * torch.sin(
+            self.ws * linout.unsqueeze(-1) + self.phis
+        )
         return sinusoidal_modulation.sum(dim=-1)
 
     def apply_activation(self, x):
