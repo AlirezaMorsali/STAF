@@ -61,7 +61,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"using {device}")
 
 im = utils.normalize(plt.imread(args.input).astype(np.float32), True)
-k = 1
+k = 2
 im = cv2.resize(im, None, fx=1 / k, fy=1 / k, interpolation=cv2.INTER_AREA)
 if len(im.shape) == 2:
     H, W = im.shape
@@ -135,6 +135,7 @@ def get_model(inr_model):
 
 model1 = get_model(args.inr_model1)
 model2 = get_model(args.inr_model2)
+torch.save(model2, "data/staf.pth")
 
 
 def get_optim(inr_model, model, lr):
