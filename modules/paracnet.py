@@ -94,6 +94,7 @@ class INR(nn.Module):
         super().__init__()
         self.pos_encode = pos_encode
         self.nonlin = Parasin
+        self.out_features = out_features
 
         self.net = []
         self.net.append(
@@ -118,10 +119,13 @@ class INR(nn.Module):
             )
 
         if outermost_linear:
+            self.heads = nn.ModuleList()
             dtype = torch.float
-            final_linear = nn.Linear(hidden_features, out_features, dtype=dtype)
+            for j in range(out_features):
+                self.heads.append(nn.Linear(hidden_features, 1, dtype=dtype))
 
-            self.net.append(final_linear)
+            # final_linear = nn.Linear(hidden_features, out_features, dtype=dtype)
+            # self.net.append(final_linear)
         else:
             self.net.append(
                 self.nonlin(
@@ -132,10 +136,13 @@ class INR(nn.Module):
                     scale=scale,
                 )
             )
-
         self.net = nn.Sequential(*self.net)
 
     def forward(self, coords):
         output = self.net(coords)
+        res = []
+        for head in self.heads:
+            res.append(head(output))
+        concatenated_output = torch.stack(res, dim=2).squeeze(3)
 
-        return output
+        return concatenated_output
