@@ -256,8 +256,8 @@ def train(args, wandb_xp=None):
     if args.non_linearity == "wire":
         # Gabor filter constants.
         # We suggest omega0 = 4 and sigma0 = 4 for reconst, and omega0=20, sigma0=30 for image representation
-        omega0 = 5.0  # Frequency of sinusoid
-        sigma0 = 5.0  # Sigma of Gaussian
+        omega0 = 20  # Frequency of sinusoid
+        sigma0 = 30  # Sigma of Gaussian
 
     else:
         omega0 = 30.0  # Frequency of sinusoid
