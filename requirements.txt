@@ -10,5 +10,4 @@ opencv-python
 matplotlib
 tqdm
 numpy
-skimage
 Pillow

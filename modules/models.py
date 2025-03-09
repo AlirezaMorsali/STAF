@@ -1,4 +1,4 @@
-
+from . import finer
 from . import kan
 from . import gauss
 from . import mfn
@@ -19,7 +19,8 @@ model_dict = {'gauss': gauss,
               'ffn': None,
               'incode': incode,
               'parac': paracnet,
-              'kan': kan}
+              'kan': kan,
+              'finer': finer}
 
 
 class INR():
@@ -36,5 +37,5 @@ class INR():
                 self.model = model_dict['siren']
             else:
                 assert "Invalid ffn_type. Choose from: [relu, swish, siren]"
-        
+
         return self.model.INR(*args, **kwargs)
