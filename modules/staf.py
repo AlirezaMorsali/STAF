@@ -5,7 +5,7 @@ import torch
 from torch import nn
 import math
 
-class Parasin(nn.Module):
+class StafLayer(nn.Module):
     """
     See paper sec. 3.2, final paragraph, and supplement Sec. 1.5 for
     discussion of omega_0.
@@ -90,7 +90,7 @@ class INR(nn.Module):
     ):
         super().__init__()
         self.pos_encode = pos_encode
-        self.nonlin = Parasin
+        self.nonlin = StafLayer
 
         self.net = []
         self.net.append(

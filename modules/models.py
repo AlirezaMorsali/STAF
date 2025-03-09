@@ -7,7 +7,7 @@ from . import siren
 from . import wire
 from . import wire2d
 from . import incode
-from . import paracnet
+from . import staf
 
 
 model_dict = {'gauss': gauss,
@@ -18,7 +18,7 @@ model_dict = {'gauss': gauss,
               'wire2d': wire2d,
               'ffn': None,
               'incode': incode,
-              'parac': paracnet,
+              'staf': staf,
               'kan': kan,
               'finer': finer}
 
@@ -37,5 +37,5 @@ class INR():
                 self.model = model_dict['siren']
             else:
                 assert "Invalid ffn_type. Choose from: [relu, swish, siren]"
-
+        
         return self.model.INR(*args, **kwargs)
