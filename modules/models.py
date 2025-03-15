@@ -1,4 +1,4 @@
-
+from . import finer
 from . import kan
 from . import gauss
 from . import mfn
@@ -7,7 +7,7 @@ from . import siren
 from . import wire
 from . import wire2d
 from . import incode
-from . import paracnet
+from . import staf
 
 
 model_dict = {'gauss': gauss,
@@ -18,8 +18,9 @@ model_dict = {'gauss': gauss,
               'wire2d': wire2d,
               'ffn': None,
               'incode': incode,
-              'parac': paracnet,
-              'kan': kan}
+              'staf': staf,
+              'kan': kan,
+              'finer': finer}
 
 
 class INR():

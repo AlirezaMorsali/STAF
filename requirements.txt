@@ -1,5 +1,5 @@
 scikit-image
-PyMCubes 
+PyMCubes
 plyfile
 trimesh
 pysdf
@@ -12,3 +12,5 @@ tqdm
 numpy
 skimage
 Pillow
+pytorch_msssim
+kornia
