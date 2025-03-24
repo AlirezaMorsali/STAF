@@ -6,7 +6,7 @@
 
 **STAF** is a novel approach that enhances Implicit Neural Representations (INRs) by introducing trainable sinusoidal activation functions. Specifically, STAF dynamically modulates its frequency components, enabling networks to adaptively learn and represent complex signals with higher precision and efficiency. It excels in signal representation, handling various tasks such as image, shape, and audio reconstructions, and tackles complex challenges like spectral bias and inverse problems, outperforming state-of-the-art methods in accuracy and reconstruction fidelity.
 
-> [*Alireza Morsali*](), [*MohammadJavad Vaez*](), [*Hossein Soltani*](https://neotod.github.io/), [*Amirhossein Kazerouni*](https://amirhossein-kz.github.io/), [*Babak Taati*](), [*Morteza Mohammad-Noori*]()
+> [*Alireza Morsali*](), [*MohammadJavad Vaez*](https://mjvaez.github.io), [*Hossein Soltani*](https://neotod.github.io/), [*Amirhossein Kazerouni*](https://amirhossein-kz.github.io/), [*Babak Taati*](), [*Morteza Mohammad-Noori*]()
 >
 
 <br>
@@ -52,8 +52,8 @@ The denoising experiment can be reproduced by running the `train_denoising.ipynb
 ### Image Super-resolution
 The super-resolution experiment can be reproduced by running the `train_sr.ipynb` notebook.
 
-<!-- ### NTK 
-??? -->
+### NTK 
+The NTK eigenfunctions and eigenvalues can be reproduced by running the `figure_5.py` of [inr_dictionaries](https://github.com/neotod/inr_dictionaries/).
 
 
 ## Acknowledgement
@@ -61,12 +61,11 @@ We thank the authors of [INCODE](https://github.com/xmindflow/INCODE), [inr_dict
 
 
 ## Citation
-<!-- ```bibtex
-@inproceedings{kazerouni2024incode,
+```bibtex
+@article{morsali2025staf,
   title={STAF: Sinusoidal Trainable Activation Functions for Implicit Neural Representation},
-  author={Kazerouni, Amirhossein and Azad, Reza and Hosseini, Alireza and Merhof, Dorit and Bagci, Ulas},
-  booktitle={Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision},
-  pages={1298--1307},
-  year={2024}
+  author={Morsali, Alireza and Vaez, MohammadJavad and Soltani, Hossein and Kazerouni, Amirhossein and Taati, Babak and Mohammad-Noori, Morteza},
+  journal={arXiv preprint arXiv:2502.00869},
+  year={2025}
 }
-``` -->
+```
