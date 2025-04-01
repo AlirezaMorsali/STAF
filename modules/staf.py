@@ -11,7 +11,7 @@ class StafLayer(nn.Module):
     of sinusoidal functions. Each sinusoid has its own frequency (ws), phase (phis), and scale factor (bs).
     
     The modulation is defined as:
-        output = Σ_{i=1}^{nf} bs[i] * sin(ws[i] * linout + phis[i])
+        output = Σ_{i=1}^{tau} bs[i] * sin(ws[i] * linout + phis[i])
     
     Args:
         in_features (int): Number of input features.
@@ -29,6 +29,7 @@ class StafLayer(nn.Module):
         self,
         in_features,
         out_features,
+        tau,
         bias=True,
         is_first=False,
         omega_0=30,
@@ -37,8 +38,8 @@ class StafLayer(nn.Module):
     ):
         super().__init__()
 
-        # Set number of sinusoidal functions to combine (nf = number of frequencies)
-        self.nf = 5
+        # Set number of sinusoidal functions to combine (tau = number of frequencies)
+        self.tau = tau
         self.omega_0 = omega_0
         self.is_first = is_first
 
@@ -58,17 +59,17 @@ class StafLayer(nn.Module):
         - bs: Scale factors for each sinusoid, initialized based on a Laplace distribution.
         """
         # Frequencies: scale random values by omega_0
-        ws = self.omega_0 * torch.rand(self.nf)
+        ws = self.omega_0 * torch.rand(self.tau)
         self.ws = nn.Parameter(ws, requires_grad=True)
 
         # Phases: initialize uniformly in the range [-π, π]
         self.phis = nn.Parameter(
-            -math.pi + 2 * math.pi * torch.rand(self.nf), requires_grad=True
+            -math.pi + 2 * math.pi * torch.rand(self.tau), requires_grad=True
         )
 
         # Scale factors: initialize based on a Laplace distribution to provide diversity in activations
-        diversity_y = 1 / (2 * self.nf)
-        laplace_samples = torch.distributions.Laplace(0, diversity_y).sample((self.nf,))
+        diversity_y = 1 / (2 * self.tau)
+        laplace_samples = torch.distributions.Laplace(0, diversity_y).sample((self.tau,))
         self.bs = nn.Parameter(torch.sign(laplace_samples) * torch.sqrt(torch.abs(laplace_samples)), requires_grad=True)
 
     def forward(self, input):
@@ -101,25 +102,6 @@ class StafLayer(nn.Module):
         sinusoidal_modulation = self.bs * torch.sin(self.ws * linout.unsqueeze(-1) + self.phis)
         return sinusoidal_modulation.sum(dim=-1)
 
-    def apply_activation(self, x):
-        """
-        Alternative implementation of the sinusoidal activation.
-        
-        This method applies the sinusoidal activation in a loop over each frequency parameter.
-        It is functionally equivalent to param_act() but written using an explicit loop.
-        
-        Args:
-            x (Tensor): Input tensor.
-        
-        Returns:
-            Tensor: Output tensor after applying the scaled sinusoidal activation.
-        """
-        y = torch.zeros_like(x)
-        # Loop over each sinusoid parameter and accumulate the activations
-        for i in range(len(self.ws)):
-            y += self.bs[i] * torch.sin((self.ws[i] * x) + self.phis[i])
-        return y
-
 
 class INR(nn.Module):
     """
@@ -138,6 +120,7 @@ class INR(nn.Module):
         first_omega_0 (float, optional): Frequency factor for the first layer. Default is 30.
         hidden_omega_0 (float, optional): Frequency factor for hidden layers. Default is 30.0.
         scale (float, optional): Scale factor (passed to each STAF layer). Default is 10.0.
+        tau: (int, optional) number of frequencies. Default is 5.
         pos_encode (bool, optional): If True, applies positional encoding to the inputs (not used in this implementation).
         sidelength (int, optional): Reserved for potential image tasks (unused here). Default is 512.
         fn_samples (optional): Reserved for potential future use. Default is None.
@@ -153,6 +136,7 @@ class INR(nn.Module):
         first_omega_0=30,
         hidden_omega_0=30.0,
         scale=10.0,
+        tau=5,
         pos_encode=False,
         sidelength=512,
         fn_samples=None,
@@ -170,6 +154,7 @@ class INR(nn.Module):
                 is_first=True,
                 omega_0=first_omega_0,
                 scale=scale,
+                tau=tau
             )
         )
 
@@ -181,6 +166,7 @@ class INR(nn.Module):
                     is_first=False,
                     omega_0=hidden_omega_0,
                     scale=scale,
+                    tau=tau
                 )
             )
 
@@ -197,6 +183,7 @@ class INR(nn.Module):
                     is_first=False,
                     omega_0=hidden_omega_0,
                     scale=scale,
+                    tau=tau
                 )
             )
 
