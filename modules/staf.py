@@ -6,13 +6,13 @@ import math
 class StafLayer(nn.Module):
     """
     StafLayer applies a sinusoidal modulation to the output of a linear transformation.
-    
-    The layer first performs a linear mapping on the input, then modulates the result by a weighted sum 
+
+    The layer first performs a linear mapping on the input, then modulates the result by a weighted sum
     of sinusoidal functions. Each sinusoid has its own frequency (ws), phase (phis), and scale factor (bs).
-    
+
     The modulation is defined as:
         output = Σ_{i=1}^{tau} bs[i] * sin(ws[i] * linout + phis[i])
-    
+
     Args:
         in_features (int): Number of input features.
         out_features (int): Number of output features.
@@ -25,6 +25,7 @@ class StafLayer(nn.Module):
         scale (float, optional): A scaling factor (unused directly in this code but reserved for potential extensions). Default is 10.0.
         init_weights (bool, optional): Flag indicating whether to initialize weights. Default is True.
     """
+
     def __init__(
         self,
         in_features,
@@ -49,11 +50,11 @@ class StafLayer(nn.Module):
 
         # Initialize the sinusoidal parameters: frequencies (ws), phases (phis), and scale factors (bs)
         self.init_params()
-                
+
     def init_params(self):
         """
         Initialize parameters for the sinusoidal activations.
-        
+
         - ws: Frequency parameters, scaled by omega_0 and randomly initialized.
         - phis: Phase offsets, uniformly sampled from [-π, π].
         - bs: Scale factors for each sinusoid, initialized based on a Laplace distribution.
@@ -69,47 +70,60 @@ class StafLayer(nn.Module):
 
         # Scale factors: initialize based on a Laplace distribution to provide diversity in activations
         diversity_y = 1 / (2 * self.tau)
-        laplace_samples = torch.distributions.Laplace(0, diversity_y).sample((self.tau,))
-        self.bs = nn.Parameter(torch.sign(laplace_samples) * torch.sqrt(torch.abs(laplace_samples)), requires_grad=True)
+        laplace_samples = torch.distributions.Laplace(0, diversity_y).sample(
+            (self.tau,)
+        )
+        self.bs = nn.Parameter(
+            torch.sign(laplace_samples) * torch.sqrt(torch.abs(laplace_samples)),
+            requires_grad=True,
+        )
 
-    def forward(self, input):
+    def forward(self, input_):
         """
         Forward pass through the STAF layer.
-        
+
         Args:
-            input (Tensor): Input tensor to the layer.
-            
+            input_ (Tensor): Input tensor to the layer.
+
         Returns:
             Tensor: Output tensor after applying the linear transformation and sinusoidal modulation.
         """
         # Apply linear transformation and then the sinusoidal modulation defined in param_act()
-        return self.param_act(self.linear(input))
+        x = self.linear(input_)
+        act_output = self.param_act(x)
+        if self.is_first:
+            return act_output
+        else:
+            output = act_output + x
+            return output
 
     def param_act(self, linout):
         """
         Apply the sinusoidal activation function to the linear output.
-        
+
         This function first unsqueezes the linear output to add a dimension, then applies a sine function
         after scaling by each frequency and shifting by its corresponding phase. The result is weighted by bs.
-        
+
         Args:
             linout (Tensor): Output from the linear layer.
-        
+
         Returns:
             Tensor: Sum of modulated sinusoidal activations along the frequency dimension.
         """
         # Compute sinusoidal modulation for each frequency and sum them
-        sinusoidal_modulation = self.bs * torch.sin(self.ws * linout.unsqueeze(-1) + self.phis)
+        sinusoidal_modulation = self.bs * torch.sin(
+            self.ws * linout.unsqueeze(-1) + self.phis
+        )
         return sinusoidal_modulation.sum(dim=-1)
 
 
 class INR(nn.Module):
     """
     INR (Implicit Neural Representation) network using STAF layers.
-    
+
     This network is composed of a sequence of STAF layers (nonlinear layers) followed by an optional final linear layer.
     It can be used for tasks like representing images, shapes, or other continuous signals.
-    
+
     Args:
         in_features (int): Number of input features (or dimensions).
         hidden_features (int): Number of features in the hidden layers.
@@ -126,6 +140,7 @@ class INR(nn.Module):
         fn_samples (optional): Reserved for potential future use. Default is None.
         use_nyquist (bool, optional): Reserved flag for Nyquist-related processing. Default is True.
     """
+
     def __init__(
         self,
         in_features,
@@ -154,7 +169,7 @@ class INR(nn.Module):
                 is_first=True,
                 omega_0=first_omega_0,
                 scale=scale,
-                tau=tau
+                tau=tau,
             )
         )
 
@@ -166,7 +181,7 @@ class INR(nn.Module):
                     is_first=False,
                     omega_0=hidden_omega_0,
                     scale=scale,
-                    tau=tau
+                    tau=tau,
                 )
             )
 
@@ -183,7 +198,7 @@ class INR(nn.Module):
                     is_first=False,
                     omega_0=hidden_omega_0,
                     scale=scale,
-                    tau=tau
+                    tau=tau,
                 )
             )
 
