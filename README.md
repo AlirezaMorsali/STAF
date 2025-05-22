@@ -20,7 +20,7 @@
 
 ### Data
 You can download the data utilized in the paper from this  [link](https://drive.google.com/file/d/1AXr64xXE_oQMIWBpgzZuh4ZtWEVyupLM/view?usp=drive_link).
-Unzip the dataset and use it in the code.
+Unzip the dataset, then copy it in the `data` directory in the code main directory.
 
 ### Requirements
 Install the requirements with:
@@ -36,14 +36,12 @@ The image experiment can be reproduced by running the `train_image.ipynb` notebo
 The audio experiment can be reproduced by running the `train_audio.ipynb` notebook.
 
 ### Shape Representation
-The shape experiment can be reproduced by running the `train_sdf.ipynb` notebook. For your convenience, we have included the occupancy volume of Lucy with regular sampling in 512x512x512 cubes in the data file. 
+The shape experiment can be reproduced by running the `train_sdf.ipynb` notebook. For your convenience, we have included the occupancy volume of Lucy, Thai, Armadillo and Dragon in the data file. 
 
 > <picture>
 >   <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/Mqxx/GitHub-Markdown/main/blockquotes/badge/light-theme/note.svg">
 >   <img alt="Note" src="https://raw.githubusercontent.com/Mqxx/GitHub-Markdown/main/blockquotes/badge/dark-theme/note.svg">
-> </picture><br>
-> To test the model with custom input data, you can run the <code>preprocess_sdf.ipynb</code> notebook, which will generate a pre-processed <code>.npy</code> file for your desired input.
->
+> </picture>
 > <br>
 >  The output is a <code>.dae</code> file that can be visualized using software such as Meshlab (a cross-platform visualizer and editor for 3D models).
 
