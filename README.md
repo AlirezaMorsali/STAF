@@ -48,9 +48,5 @@ The denoising experiment can be reproduced by running the `train_denoising.ipynb
 The super-resolution experiment can be reproduced by running the `train_sr.ipynb` notebook.
 
 ### NTK 
-The NTK eigenfunctions and eigenvalues can be reproduced by running the `figure_5.py` of [inr_dictionaries](https://github.com/neotod/inr_dictionaries/).
-
-
-## Acknowledgement
-We thank the authors of [INCODE](https://github.com/xmindflow/INCODE), [inr_dictionaries](https://github.com/gortizji/inr_dictionaries) for their code repositories.
+The NTK eigenfunctions and eigenvalues can be reproduced by running the `figure_5.py` of `inr_dictionaries`.
 
