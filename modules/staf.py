@@ -30,6 +30,7 @@ class StafLayer(nn.Module):
         in_features,
         out_features,
         tau,
+        skip_conn=False,
         bias=True,
         is_first=False,
         omega_0=30,
@@ -42,6 +43,7 @@ class StafLayer(nn.Module):
         self.tau = tau
         self.omega_0 = omega_0
         self.is_first = is_first
+        self.skip_conn = skip_conn
 
         self.in_features = in_features
         # Define a linear transformation layer
@@ -71,19 +73,25 @@ class StafLayer(nn.Module):
         diversity_y = 1 / (2 * self.tau)
         laplace_samples = torch.distributions.Laplace(0, diversity_y).sample((self.tau,))
         self.bs = nn.Parameter(torch.sign(laplace_samples) * torch.sqrt(torch.abs(laplace_samples)), requires_grad=True)
-
-    def forward(self, input):
+    
+    def forward(self, input_):
         """
         Forward pass through the STAF layer.
-        
+
         Args:
-            input (Tensor): Input tensor to the layer.
-            
+            input_ (Tensor): Input tensor to the layer.
+
         Returns:
             Tensor: Output tensor after applying the linear transformation and sinusoidal modulation.
         """
         # Apply linear transformation and then the sinusoidal modulation defined in param_act()
-        return self.param_act(self.linear(input))
+        x = self.linear(input_)
+        act_output = self.param_act(x)
+        if self.is_first or not self.skip_conn: # don't use skip connection either it's the first layer or skip_conn=False
+            return act_output
+        else:
+            output = act_output + x
+            return output
 
     def param_act(self, linout):
         """
@@ -122,6 +130,7 @@ class INR(nn.Module):
         scale (float, optional): Scale factor (passed to each STAF layer). Default is 10.0.
         tau: (int, optional) number of frequencies. Default is 5.
         pos_encode (bool, optional): If True, applies positional encoding to the inputs (not used in this implementation).
+        skip_conn (bool, optional): Whether or not use skip connection. Use this for Image reconstruction task.
         sidelength (int, optional): Reserved for potential image tasks (unused here). Default is 512.
         fn_samples (optional): Reserved for potential future use. Default is None.
         use_nyquist (bool, optional): Reserved flag for Nyquist-related processing. Default is True.
@@ -138,6 +147,7 @@ class INR(nn.Module):
         scale=10.0,
         tau=5,
         pos_encode=False,
+        skip_conn=False,
         sidelength=512,
         fn_samples=None,
         use_nyquist=True,
@@ -166,7 +176,8 @@ class INR(nn.Module):
                     is_first=False,
                     omega_0=hidden_omega_0,
                     scale=scale,
-                    tau=tau
+                    tau=tau,
+                    skip_conn=skip_conn
                 )
             )
 
@@ -183,7 +194,8 @@ class INR(nn.Module):
                     is_first=False,
                     omega_0=hidden_omega_0,
                     scale=scale,
-                    tau=tau
+                    tau=tau,
+                    skip_conn=skip_conn
                 )
             )
 

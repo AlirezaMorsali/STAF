@@ -2,12 +2,8 @@
 
 ---
 
-### [Project Page](#) | [Paper](https://arxiv.org/abs/2502.00869) | [Data](https://drive.google.com/file/d/1AXr64xXE_oQMIWBpgzZuh4ZtWEVyupLM/view?usp=drive_link)
-
 **STAF** is a novel approach that enhances Implicit Neural Representations (INRs) by introducing trainable sinusoidal activation functions. Specifically, STAF dynamically modulates its frequency components, enabling networks to adaptively learn and represent complex signals with higher precision and efficiency. It excels in signal representation, handling various tasks such as image, shape, and audio reconstructions, and tackles complex challenges like spectral bias and inverse problems, outperforming state-of-the-art methods in accuracy and reconstruction fidelity.
 
-> [*Alireza Morsali*](), [*MohammadJavad Vaez*](https://mjvaez.github.io), [*Hossein Soltani*](https://neotod.github.io/), [*Amirhossein Kazerouni*](https://amirhossein-kz.github.io/), [*Babak Taati*](), [*Morteza Mohammad-Noori*]()
->
 
 <br>
 
@@ -58,13 +54,3 @@ The NTK eigenfunctions and eigenvalues can be reproduced by running the `figure_
 ## Acknowledgement
 We thank the authors of [INCODE](https://github.com/xmindflow/INCODE), [inr_dictionaries](https://github.com/gortizji/inr_dictionaries) for their code repositories.
 
-
-## Citation
-```bibtex
-@article{morsali2025staf,
-  title={STAF: Sinusoidal Trainable Activation Functions for Implicit Neural Representation},
-  author={Morsali, Alireza and Vaez, MohammadJavad and Soltani, Hossein and Kazerouni, Amirhossein and Taati, Babak and Mohammad-Noori, Morteza},
-  journal={arXiv preprint arXiv:2502.00869},
-  year={2025}
-}
-```
