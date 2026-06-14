@@ -1,4 +1,7 @@
-# STAF: Sinusoidal Trainable Activation Functions for Implicit Neural Representation
+# STAF: Sinusoidal Trainable Activation Functions for Implicit Neural Representation *(Accepted in TMLR, June 2026)*
+
+**Website:** [https://alirezamorsali.github.io/staf/](https://alirezamorsali.github.io/staf/)  
+**Paper:** [https://openreview.net/pdf?id=ZDmBPYptbL](https://openreview.net/pdf?id=ZDmBPYptbL)
 
 ---
 
